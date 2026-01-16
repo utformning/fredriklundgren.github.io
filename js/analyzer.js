@@ -31,7 +31,7 @@ async function initMediaPipe() {
 
         pose = new Pose({
             locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                return `https://unpkg.com/@mediapipe/pose/${file}`;
             }
         });
 
