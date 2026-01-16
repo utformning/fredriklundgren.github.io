@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI Form Analyzer - Analysera din discgolf-kastteknik med AI">
+    <title>AI Form Analyzer - Felix Lundgren</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .analyzer-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 100px 20px 50px;
+        }
+
+        .analyzer-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .analyzer-header h1 {
+            color: var(--dark-color);
+            margin-bottom: 1rem;
+        }
+
+        .analyzer-header p {
+            color: var(--text-light);
+            font-size: 1.2rem;
+        }
+
+        .analyzer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .video-section {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: var(--shadow);
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #videoElement, #outputCanvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        #outputCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .upload-area {
+            border: 3px dashed var(--primary-color);
+            border-radius: 10px;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--light-color);
+        }
+
+        .upload-area:hover {
+            background: #d5e8d4;
+            border-color: var(--primary-dark);
+        }
+
+        .upload-area.drag-over {
+            background: #c8e6c9;
+            border-color: var(--primary-dark);
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .controls button {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .analysis-section {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: var(--shadow);
+        }
+
+        .analysis-section h2 {
+            color: var(--dark-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .feature-card {
+            background: var(--light-color);
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .status-badge.pending {
+            background: #ffeaa7;
+            color: #d63031;
+        }
+
+        .status-badge.analyzing {
+            background: #74b9ff;
+            color: #0984e3;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-badge.complete {
+            background: #55efc4;
+            color: #00b894;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .analysis-results {
+            display: none;
+        }
+
+        .analysis-results.active {
+            display: block;
+        }
+
+        .metric {
+            padding: 1rem;
+            background: var(--white);
+            border-left: 4px solid var(--primary-color);
+            margin-bottom: 1rem;
+            border-radius: 5px;
+        }
+
+        .metric-label {
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-size: 1.1rem;
+            color: var(--text-light);
+        }
+
+        .metric-good {
+            border-left-color: #00b894;
+        }
+
+        .metric-warning {
+            border-left-color: #fdcb6e;
+        }
+
+        .metric-error {
+            border-left-color: #d63031;
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading-spinner.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid var(--light-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        @media (max-width: 968px) {
+            .analyzer-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .controls button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h2>Felix Lundgren</h2>
+                <span class="tagline">Discgolftränare</span>
+            </div>
+            <ul class="nav-menu" id="navMenu">
+                <li><a href="index.html" class="nav-link">Hem</a></li>
+                <li><a href="index.html#om" class="nav-link">Om mig</a></li>
+                <li><a href="index.html#tjanster" class="nav-link">Tjänster</a></li>
+                <li><a href="analyzer.html" class="nav-link active">AI Analyzer</a></li>
+                <li><a href="index.html#kontakt" class="nav-link">Kontakt</a></li>
+            </ul>
+            <button class="hamburger" id="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="analyzer-container">
+        <div class="analyzer-header">
+            <h1>AI Form Analyzer</h1>
+            <p>Ladda upp en video av ditt kast och få detaljerad AI-analys av din teknik</p>
+        </div>
+
+        <div class="analyzer-grid">
+            <!-- Video Section -->
+            <div class="video-section">
+                <h2>Din video</h2>
+                <div id="uploadArea" class="upload-area">
+                    <div class="upload-icon">🎥</div>
+                    <h3>Ladda upp din video</h3>
+                    <p>Dra och släpp eller klicka för att välja en video</p>
+                    <p style="font-size: 0.9rem; color: var(--text-light); margin-top: 1rem;">
+                        Stödjer MP4, MOV, WebM • Max 100MB
+                    </p>
+                </div>
+                <input type="file" id="fileInput" accept="video/mp4,video/mov,video/webm">
+
+                <div class="video-container" id="videoContainer" style="display: none;">
+                    <video id="videoElement" controls></video>
+                    <canvas id="outputCanvas"></canvas>
+                </div>
+
+                <div class="loading-spinner" id="loadingSpinner">
+                    <div class="spinner"></div>
+                    <p>Laddar MediaPipe...</p>
+                </div>
+
+                <div class="controls" id="controls" style="display: none;">
+                    <button class="btn btn-primary" id="analyzeBtn">
+                        <span>🔍 Analysera</span>
+                    </button>
+                    <button class="btn" id="resetBtn" style="background: var(--text-light); color: white;">
+                        <span>🔄 Ny video</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Analysis Section -->
+            <div class="analysis-section">
+                <h2>Analys</h2>
+
+                <div id="statusArea">
+                    <span class="status-badge pending">Väntar på video</span>
+
+                    <div class="feature-card">
+                        <h3><span class="feature-icon">✓</span> Pose Detection</h3>
+                        <p>AI identifierar din kroppshållning och rörelser under kastet</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3><span class="feature-icon">✓</span> Teknikanalys</h3>
+                        <p>Detaljerad analys av kastteknik, balans och kraft</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3><span class="feature-icon">✓</span> Personlig träningsplan</h3>
+                        <p>Få rekommendationer baserat på din analys</p>
+                    </div>
+                </div>
+
+                <div class="analysis-results" id="analysisResults">
+                    <span class="status-badge complete">Analys klar!</span>
+
+                    <div class="metric metric-good">
+                        <div class="metric-label">Kroppshållning</div>
+                        <div class="metric-value" id="postureResult">Analyserar...</div>
+                    </div>
+
+                    <div class="metric metric-good">
+                        <div class="metric-label">Balans</div>
+                        <div class="metric-value" id="balanceResult">Analyserar...</div>
+                    </div>
+
+                    <div class="metric metric-warning">
+                        <div class="metric-label">Höftrotation</div>
+                        <div class="metric-value" id="hipRotationResult">Analyserar...</div>
+                    </div>
+
+                    <div class="metric metric-good">
+                        <div class="metric-label">Armrörelse</div>
+                        <div class="metric-value" id="armMovementResult">Analyserar...</div>
+                    </div>
+
+                    <div class="metric metric-good">
+                        <div class="metric-label">Uppföljning</div>
+                        <div class="metric-value" id="followThroughResult">Analyserar...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Felix Lundgren - Discgolftränare. Alla rättigheter förbehållna.</p>
+            <div class="social-links">
+                <a href="#" aria-label="Facebook">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                    </svg>
+                </a>
+                <a href="#" aria-label="Instagram">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="5"/>
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- MediaPipe -->
+    <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+    <!-- Main Script -->
+    <script src="js/analyzer.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>
