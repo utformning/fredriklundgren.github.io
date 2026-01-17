@@ -4,11 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="AI Form Analyzer - Analysera din discgolf-kastteknik med AI">
-    <title>AI Form Analyzer - Felix Lundgren</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+   rel="stylesheet">
     <style>
         .analyzer-container {
             max-width: 1400px;
@@ -252,6 +248,12 @@
             }
         }
     </style>
+    <title>AI Form Analyzer - Felix Lundgren Discgolf</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/analyzer.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Navigation -->
@@ -275,7 +277,6 @@
             </button>
         </div>
     </nav>
-
     <!-- Main Content -->
     <div class="analyzer-container">
         <div class="analyzer-header">
@@ -366,11 +367,149 @@
                     <div class="metric metric-good">
                         <div class="metric-label">Uppföljning</div>
                         <div class="metric-value" id="followThroughResult">Analyserar...</div>
+    <!-- Hero Section -->
+    <section class="analyzer-hero">
+        <div class="container">
+            <h1>🎯 AI Form Analyzer</h1>
+            <p class="hero-description">Ladda upp en video av ditt kast och få detaljerad AI-analys av din teknik</p>
+            <div class="features-quick">
+                <span>✓ Pose Detection</span>
+                <span>✓ Teknikanalys</span>
+                <span>✓ Personlig Träningsplan</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Analyzer Section -->
+    <section class="analyzer-section">
+        <div class="container">
+            <div class="analyzer-grid">
+                <!-- Upload Area -->
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-content">
+                        <div class="upload-icon">📹</div>
+                        <h3>Ladda upp din video</h3>
+                        <p>Dra och släpp eller klicka för att välja en video</p>
+                        <input type="file" id="videoInput" accept="video/*" hidden>
+                        <button class="btn btn-primary" id="uploadBtn">Välj Video</button>
+                        <div class="upload-info">
+                            <small>Stödjer MP4, MOV, WebM • Max 100MB</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Player -->
+                <div class="video-container" id="videoContainer" style="display: none;">
+                    <div class="video-wrapper">
+                        <video id="videoPlayer" controls></video>
+                        <canvas id="poseCanvas"></canvas>
+                    </div>
+                    <div class="video-controls">
+                        <button class="btn btn-secondary" id="changeVideoBtn">Byt Video</button>
+                        <button class="btn btn-primary" id="analyzeBtn">
+                            <span class="btn-text">Analysera Video</span>
+                            <span class="btn-loader" style="display: none;">⏳ Analyserar...</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="results-container" id="resultsContainer" style="display: none;">
+                    <h3>📊 Analysresultat</h3>
+
+                    <!-- Overall Score -->
+                    <div class="score-card">
+                        <div class="score-circle" id="overallScore">
+                            <span class="score-value">--</span>
+                            <span class="score-label">Poäng</span>
+                        </div>
+                        <div class="score-details">
+                            <h4>Övergripande Bedömning</h4>
+                            <p id="overallFeedback">Analyserar din form...</p>
+                        </div>
+                    </div>
+
+                    <!-- Issues Found -->
+                    <div class="issues-section">
+                        <h4>⚠️ Identifierade Problem</h4>
+                        <div id="issuesList" class="issues-list">
+                            <!-- Issues will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Metrics -->
+                    <div class="metrics-section">
+                        <h4>📈 Tekniska Mätningar</h4>
+                        <div id="metricsGrid" class="metrics-grid">
+                            <!-- Metrics will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Training Plan -->
+                    <div class="training-plan">
+                        <h4>💪 Personlig Träningsplan</h4>
+                        <div id="trainingPlanContent">
+                            <!-- Training plan will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- AI Insights -->
+                    <div class="ai-insights" id="aiInsights" style="display: none;">
+                        <h4>🤖 AI-genererade Insikter</h4>
+                        <div id="aiInsightsContent" class="insights-content">
+                            <!-- AI insights will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- How It Works -->
+            <div class="how-it-works">
+                <h3>Hur det fungerar</h3>
+                <div class="steps-grid">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h4>Ladda upp video</h4>
+                        <p>Filma ditt backhand eller forehand kast från sidan</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h4>AI analyserar</h4>
+                        <p>MediaPipe detekterar din pose och mäter vinklar och timing</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <h4>Få feedback</h4>
+                        <p>Prioriterade problem och specifika övningar för förbättring</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="filming-tips">
+                <h3>📸 Tips för bästa resultat</h3>
+                <div class="tips-grid">
+                    <div class="tip">
+                        <span class="tip-icon">📐</span>
+                        <p><strong>Kameravinkel:</strong> Filma från sidan i 90° vinkel</p>
+                    </div>
+                    <div class="tip">
+                        <span class="tip-icon">👤</span>
+                        <p><strong>Hel kropp:</strong> Se till att hela kroppen syns i bild</p>
+                    </div>
+                    <div class="tip">
+                        <span class="tip-icon">☀️</span>
+                        <p><strong>Belysning:</strong> Filma i bra ljus, undvik motljus</p>
+                    </div>
+                    <div class="tip">
+                        <span class="tip-icon">🎥</span>
+                        <p><strong>Kvalitet:</strong> HD-upplösning eller högre rekommenderas</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    </section>
 
     <!-- Footer -->
     <footer class="footer">
@@ -401,6 +540,11 @@
 
     <!-- Main Script -->
     <script src="js/analyzer.js"></script>
+    <!-- Load MediaPipe first -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js" crossorigin="anonymous"></script>
+
+    <!-- Load our analyzer script -->
+    <script type="module" src="js/analyzer.js"></script>
     <script src="js/script.js"></script>
 </body>
 </html>
