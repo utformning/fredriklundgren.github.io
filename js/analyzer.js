@@ -1,5 +1,5 @@
-// AI Form Analyzer - MediaPipe Integration
-let pose = null;
+// AI Form Analyzer - TensorFlow.js Pose Detection Integration
+let detector = null;
 let video = null;
 let canvas = null;
 let ctx = null;
@@ -19,75 +19,30 @@ const loadingSpinner = document.getElementById('loadingSpinner');
 const statusArea = document.getElementById('statusArea');
 const analysisResults = document.getElementById('analysisResults');
 
-// Initialize MediaPipe
-async function initMediaPipe() {
+// Initialize TensorFlow.js Pose Detection
+async function initPoseDetection() {
     try {
         loadingSpinner.classList.add('active');
 
-        // Check if MediaPipe is loaded
-        if (typeof Pose === 'undefined') {
-            throw new Error('MediaPipe kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
+        // Check if TensorFlow is loaded
+        if (typeof poseDetection === 'undefined') {
+            throw new Error('TensorFlow kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
         }
 
-        pose = new Pose({
-            locateFile: (file) => {
-                return `https://unpkg.com/@mediapipe/pose/${file}`;
-            }
+        // Create detector
+        const model = poseDetection.SupportedModels.MoveNet;
+        detector = await poseDetection.createDetector(model, {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
         });
-
-        pose.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            enableSegmentation: false,
-            smoothSegmentation: false,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        pose.onResults(onPoseResults);
 
         loadingSpinner.classList.remove('active');
-        console.log('MediaPipe initialized successfully');
+        console.log('TensorFlow Pose Detection initialized successfully');
         return true;
     } catch (error) {
-        console.error('MediaPipe initialization error:', error);
+        console.error('Pose detection initialization error:', error);
         loadingSpinner.classList.remove('active');
-        showAlert('MediaPipe kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
+        showAlert('Pose detection kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
         return false;
-    }
-}
-
-// Handle pose results
-function onPoseResults(results) {
-    if (!results.poseLandmarks) {
-        return;
-    }
-
-    // Store pose data for analysis
-    poseData.push({
-        timestamp: videoElement.currentTime,
-        landmarks: results.poseLandmarks
-    });
-
-    // Draw the pose on canvas
-    if (ctx && canvas) {
-        ctx.save();
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw landmarks
-        if (results.poseLandmarks) {
-            drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-                color: '#00FF00',
-                lineWidth: 4
-            });
-            drawLandmarks(ctx, results.poseLandmarks, {
-                color: '#FF0000',
-                lineWidth: 2,
-                radius: 6
-            });
-        }
-
-        ctx.restore();
     }
 }
 
@@ -134,9 +89,9 @@ async function handleFileSelect(file) {
         return;
     }
 
-    // Initialize MediaPipe if not already done
-    if (!pose) {
-        const initialized = await initMediaPipe();
+    // Initialize detector if not already done
+    if (!detector) {
+        const initialized = await initPoseDetection();
         if (!initialized) {
             return;
         }
@@ -189,11 +144,14 @@ analyzeBtn.addEventListener('click', async () => {
     await processVideo();
 });
 
-// Process video with MediaPipe
+// Process video with TensorFlow
 async function processVideo() {
     return new Promise((resolve) => {
+        let frameCount = 0;
+        const maxFrames = 300; // Limit frames for performance
+
         const processFrame = async () => {
-            if (videoElement.paused || videoElement.ended) {
+            if (videoElement.paused || videoElement.ended || frameCount >= maxFrames) {
                 // Analysis complete
                 videoElement.pause();
                 analyzeResults();
@@ -201,11 +159,35 @@ async function processVideo() {
                 return;
             }
 
-            // Send frame to MediaPipe
-            await pose.send({ image: videoElement });
+            try {
+                // Detect pose
+                const poses = await detector.estimatePoses(videoElement);
 
-            // Continue processing
-            requestAnimationFrame(processFrame);
+                if (poses.length > 0) {
+                    const pose = poses[0];
+
+                    // Store pose data
+                    poseData.push({
+                        timestamp: videoElement.currentTime,
+                        keypoints: pose.keypoints,
+                        score: pose.score
+                    });
+
+                    // Draw pose on canvas
+                    drawPose(pose);
+                }
+
+                frameCount++;
+            } catch (error) {
+                console.error('Error processing frame:', error);
+            }
+
+            // Continue processing (sample every 5 frames for performance)
+            if (frameCount % 5 === 0) {
+                setTimeout(() => requestAnimationFrame(processFrame), 50);
+            } else {
+                requestAnimationFrame(processFrame);
+            }
         };
 
         processFrame();
@@ -215,6 +197,45 @@ async function processVideo() {
             analyzeResults();
             resolve();
         };
+    });
+}
+
+// Draw pose on canvas
+function drawPose(pose) {
+    if (!ctx || !canvas) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw keypoints
+    pose.keypoints.forEach(keypoint => {
+        if (keypoint.score > 0.3) {
+            ctx.beginPath();
+            ctx.arc(keypoint.x, keypoint.y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#FF0000';
+            ctx.fill();
+        }
+    });
+
+    // Draw skeleton connections
+    const connections = [
+        [5, 6], [5, 7], [7, 9], [6, 8], [8, 10], // Arms
+        [5, 11], [6, 12], [11, 12], // Torso
+        [11, 13], [13, 15], [12, 14], [14, 16] // Legs
+    ];
+
+    ctx.strokeStyle = '#00FF00';
+    ctx.lineWidth = 2;
+
+    connections.forEach(([i, j]) => {
+        const kp1 = pose.keypoints[i];
+        const kp2 = pose.keypoints[j];
+
+        if (kp1.score > 0.3 && kp2.score > 0.3) {
+            ctx.beginPath();
+            ctx.moveTo(kp1.x, kp1.y);
+            ctx.lineTo(kp2.x, kp2.y);
+            ctx.stroke();
+        }
     });
 }
 
@@ -278,27 +299,48 @@ function calculateMetrics(data) {
     };
 }
 
+// Get keypoint by name
+function getKeypoint(keypoints, name) {
+    const keypointMap = {
+        'left_shoulder': 5,
+        'right_shoulder': 6,
+        'left_elbow': 7,
+        'right_elbow': 8,
+        'left_wrist': 9,
+        'right_wrist': 10,
+        'left_hip': 11,
+        'right_hip': 12,
+        'left_knee': 13,
+        'right_knee': 14,
+        'left_ankle': 15,
+        'right_ankle': 16
+    };
+
+    const index = keypointMap[name];
+    return keypoints[index];
+}
+
 // Analyze posture
 function analyzePosture(data) {
-    // Simple analysis: check if spine is relatively straight
     let goodFrames = 0;
 
     data.forEach(frame => {
-        const landmarks = frame.landmarks;
-        const shoulder = landmarks[12]; // Left shoulder
-        const hip = landmarks[24]; // Left hip
+        const leftShoulder = getKeypoint(frame.keypoints, 'left_shoulder');
+        const leftHip = getKeypoint(frame.keypoints, 'left_hip');
 
-        const angle = Math.abs(shoulder.x - hip.x);
-        if (angle < 0.1) { // Relatively aligned
-            goodFrames++;
+        if (leftShoulder.score > 0.3 && leftHip.score > 0.3) {
+            const angle = Math.abs(leftShoulder.x - leftHip.x);
+            if (angle < 50) { // Relatively aligned
+                goodFrames++;
+            }
         }
     });
 
     const score = (goodFrames / data.length) * 100;
 
-    if (score > 80) {
+    if (score > 70) {
         return { score, rating: 'good', text: 'Utmärkt upprätt hållning' };
-    } else if (score > 60) {
+    } else if (score > 50) {
         return { score, rating: 'warning', text: 'Bra hållning, kan förbättras' };
     } else {
         return { score, rating: 'error', text: 'Försök hålla ryggen rakare' };
@@ -307,23 +349,23 @@ function analyzePosture(data) {
 
 // Analyze balance
 function analyzeBalance(data) {
-    // Check foot positioning stability
     let stableFrames = 0;
 
     data.forEach(frame => {
-        const landmarks = frame.landmarks;
-        const leftAnkle = landmarks[27];
-        const rightAnkle = landmarks[28];
+        const leftAnkle = getKeypoint(frame.keypoints, 'left_ankle');
+        const rightAnkle = getKeypoint(frame.keypoints, 'right_ankle');
 
-        const footDistance = Math.abs(leftAnkle.x - rightAnkle.x);
-        if (footDistance > 0.1 && footDistance < 0.4) { // Good stance width
-            stableFrames++;
+        if (leftAnkle.score > 0.3 && rightAnkle.score > 0.3) {
+            const footDistance = Math.abs(leftAnkle.x - rightAnkle.x);
+            if (footDistance > 50 && footDistance < 200) {
+                stableFrames++;
+            }
         }
     });
 
     const score = (stableFrames / data.length) * 100;
 
-    if (score > 75) {
+    if (score > 70) {
         return { score, rating: 'good', text: 'Stabil balans genom kastet' };
     } else if (score > 50) {
         return { score, rating: 'warning', text: 'Balansen kunde vara bättre' };
@@ -334,25 +376,33 @@ function analyzeBalance(data) {
 
 // Analyze hip rotation
 function analyzeHipRotation(data) {
-    // Measure hip rotation range
     let maxRotation = 0;
 
     for (let i = 1; i < data.length; i++) {
-        const prev = data[i - 1].landmarks;
-        const curr = data[i].landmarks;
+        const prev = data[i - 1].keypoints;
+        const curr = data[i].keypoints;
 
-        const prevHipAngle = Math.atan2(prev[24].y - prev[23].y, prev[24].x - prev[23].x);
-        const currHipAngle = Math.atan2(curr[24].y - curr[23].y, curr[24].x - curr[23].x);
+        const prevLeftHip = getKeypoint(prev, 'left_hip');
+        const prevRightHip = getKeypoint(prev, 'right_hip');
+        const currLeftHip = getKeypoint(curr, 'left_hip');
+        const currRightHip = getKeypoint(curr, 'right_hip');
 
-        const rotation = Math.abs(currHipAngle - prevHipAngle);
-        maxRotation = Math.max(maxRotation, rotation);
+        if (prevLeftHip.score > 0.3 && prevRightHip.score > 0.3 &&
+            currLeftHip.score > 0.3 && currRightHip.score > 0.3) {
+
+            const prevAngle = Math.atan2(prevLeftHip.y - prevRightHip.y, prevLeftHip.x - prevRightHip.x);
+            const currAngle = Math.atan2(currLeftHip.y - currRightHip.y, currLeftHip.x - currRightHip.x);
+
+            const rotation = Math.abs(currAngle - prevAngle);
+            maxRotation = Math.max(maxRotation, rotation);
+        }
     }
 
-    const score = Math.min((maxRotation / 1.5) * 100, 100);
+    const score = Math.min((maxRotation / 1.0) * 100, 100);
 
-    if (score > 70) {
+    if (score > 60) {
         return { score, rating: 'good', text: 'Bra höftrotation för kraft' };
-    } else if (score > 50) {
+    } else if (score > 40) {
         return { score, rating: 'warning', text: 'Öka höftrotationen för mer kraft' };
     } else {
         return { score, rating: 'error', text: 'Fokusera på att rotera höfterna mer' };
@@ -361,30 +411,29 @@ function analyzeHipRotation(data) {
 
 // Analyze arm movement
 function analyzeArmMovement(data) {
-    // Check arm extension
     let goodFrames = 0;
 
     data.forEach(frame => {
-        const landmarks = frame.landmarks;
-        const shoulder = landmarks[12];
-        const elbow = landmarks[14];
-        const wrist = landmarks[16];
+        const shoulder = getKeypoint(frame.keypoints, 'right_shoulder');
+        const wrist = getKeypoint(frame.keypoints, 'right_wrist');
 
-        const armLength = Math.sqrt(
-            Math.pow(wrist.x - shoulder.x, 2) +
-            Math.pow(wrist.y - shoulder.y, 2)
-        );
+        if (shoulder.score > 0.3 && wrist.score > 0.3) {
+            const armLength = Math.sqrt(
+                Math.pow(wrist.x - shoulder.x, 2) +
+                Math.pow(wrist.y - shoulder.y, 2)
+            );
 
-        if (armLength > 0.3) { // Good extension
-            goodFrames++;
+            if (armLength > 100) {
+                goodFrames++;
+            }
         }
     });
 
     const score = (goodFrames / data.length) * 100;
 
-    if (score > 70) {
+    if (score > 60) {
         return { score, rating: 'good', text: 'Bra armsträckning' };
-    } else if (score > 50) {
+    } else if (score > 40) {
         return { score, rating: 'warning', text: 'Sträck ut armen mer' };
     } else {
         return { score, rating: 'error', text: 'Armen behöver sträckas ut mer för maximal kraft' };
@@ -393,7 +442,6 @@ function analyzeArmMovement(data) {
 
 // Analyze follow through
 function analyzeFollowThrough(data) {
-    // Check if arm continues motion after release point
     if (data.length < 10) {
         return { score: 50, rating: 'warning', text: 'Video för kort för att analysera' };
     }
@@ -402,20 +450,21 @@ function analyzeFollowThrough(data) {
     let followThroughFrames = 0;
 
     lastQuarter.forEach(frame => {
-        const landmarks = frame.landmarks;
-        const shoulder = landmarks[12];
-        const wrist = landmarks[16];
+        const shoulder = getKeypoint(frame.keypoints, 'right_shoulder');
+        const wrist = getKeypoint(frame.keypoints, 'right_wrist');
 
-        if (wrist.x > shoulder.x) { // Arm extended forward
-            followThroughFrames++;
+        if (shoulder.score > 0.3 && wrist.score > 0.3) {
+            if (wrist.x > shoulder.x) {
+                followThroughFrames++;
+            }
         }
     });
 
     const score = (followThroughFrames / lastQuarter.length) * 100;
 
-    if (score > 60) {
+    if (score > 50) {
         return { score, rating: 'good', text: 'Bra uppföljning av kastet' };
-    } else if (score > 40) {
+    } else if (score > 30) {
         return { score, rating: 'warning', text: 'Följ igenom kastet mer' };
     } else {
         return { score, rating: 'error', text: 'Viktigt att följa igenom kastet helt' };
@@ -535,8 +584,5 @@ function showAlert(message) {
 
 // Initialize on page load
 window.addEventListener('load', () => {
-    console.log('AI Form Analyzer loaded');
-
-    // Pre-load MediaPipe (optional)
-    // initMediaPipe();
+    console.log('AI Form Analyzer loaded with TensorFlow.js');
 });
