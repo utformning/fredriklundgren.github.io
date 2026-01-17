@@ -1,589 +1,588 @@
-// Disc Golf Form Analyzer with MediaPipe Pose Detection
-// Uses client-side pose estimation to analyze throwing form
+// AI Form Analyzer - TensorFlow.js Pose Detection Integration
+let detector = null;
+let video = null;
+let canvas = null;
+let ctx = null;
+let isAnalyzing = false;
+let poseData = [];
 
-class DiscGolfAnalyzer {
-    constructor() {
-        this.poseLandmarker = null;
-        this.video = null;
-        this.canvas = null;
-        this.ctx = null;
-        this.poses = [];
-        this.isAnalyzing = false;
+// DOM Elements
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const videoElement = document.getElementById('videoElement');
+const videoContainer = document.getElementById('videoContainer');
+const outputCanvas = document.getElementById('outputCanvas');
+const controls = document.getElementById('controls');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const resetBtn = document.getElementById('resetBtn');
+const loadingSpinner = document.getElementById('loadingSpinner');
+const statusArea = document.getElementById('statusArea');
+const analysisResults = document.getElementById('analysisResults');
 
-        this.init();
-    }
+// Initialize TensorFlow.js Pose Detection
+async function initPoseDetection() {
+    try {
+        loadingSpinner.classList.add('active');
 
-    async init() {
-        console.log('🚀 Initializing Disc Golf Analyzer...');
-
-        // Get DOM elements
-        this.video = document.getElementById('videoPlayer');
-        this.canvas = document.getElementById('poseCanvas');
-        this.ctx = this.canvas.getContext('2d');
-
-        // Setup event listeners
-        this.setupEventListeners();
-
-        // Initialize MediaPipe (will be loaded when needed)
-        console.log('✅ Analyzer ready!');
-    }
-
-    setupEventListeners() {
-        const uploadBtn = document.getElementById('uploadBtn');
-        const uploadArea = document.getElementById('uploadArea');
-        const videoInput = document.getElementById('videoInput');
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const changeVideoBtn = document.getElementById('changeVideoBtn');
-
-        // Upload button
-        uploadBtn.addEventListener('click', () => videoInput.click());
-        uploadArea.addEventListener('click', () => videoInput.click());
-
-        // Video input
-        videoInput.addEventListener('change', (e) => this.handleVideoUpload(e));
-
-        // Drag and drop
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('video/')) {
-                this.loadVideo(file);
-            }
-        });
-
-        // Analyze button
-        analyzeBtn.addEventListener('click', () => this.analyzeVideo());
-
-        // Change video button
-        changeVideoBtn.addEventListener('click', () => {
-            videoInput.click();
-        });
-
-        // Video loaded event
-        this.video.addEventListener('loadeddata', () => {
-            this.canvas.width = this.video.videoWidth;
-            this.canvas.height = this.video.videoHeight;
-        });
-    }
-
-    handleVideoUpload(event) {
-        const file = event.target.files[0];
-        if (file) {
-            this.loadVideo(file);
-        }
-    }
-
-    loadVideo(file) {
-        console.log('📹 Loading video:', file.name);
-
-        const url = URL.createObjectURL(file);
-        this.video.src = url;
-
-        // Show video container, hide upload area
-        document.getElementById('uploadArea').style.display = 'none';
-        document.getElementById('videoContainer').style.display = 'block';
-        document.getElementById('resultsContainer').style.display = 'none';
-
-        // Reset poses
-        this.poses = [];
-    }
-
-    async analyzeVideo() {
-        if (this.isAnalyzing) return;
-
-        this.isAnalyzing = true;
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const btnText = analyzeBtn.querySelector('.btn-text');
-        const btnLoader = analyzeBtn.querySelector('.btn-loader');
-
-        btnText.style.display = 'none';
-        btnLoader.style.display = 'inline-flex';
-        analyzeBtn.disabled = true;
-
-        try {
-            console.log('🔍 Starting analysis...');
-
-            // Initialize MediaPipe if not already done
-            if (!this.poseLandmarker) {
-                await this.initMediaPipe();
-            }
-
-            // Process video frames
-            await this.processVideoFrames();
-
-            // Analyze poses
-            const analysis = this.analyzePoses();
-
-            // Display results
-            this.displayResults(analysis);
-
-            // Show results container
-            document.getElementById('resultsContainer').style.display = 'block';
-            document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
-
-        } catch (error) {
-            console.error('❌ Analysis error:', error);
-            alert('Ett fel uppstod vid analysen. Försök igen eller välj en annan video.');
-        } finally {
-            this.isAnalyzing = false;
-            btnText.style.display = 'inline';
-            btnLoader.style.display = 'none';
-            analyzeBtn.disabled = false;
-        }
-    }
-
-    async initMediaPipe() {
-        console.log('🤖 Initializing MediaPipe Pose...');
-
-        try {
-            const vision = await window.FilesetResolver.forVisionTasks(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-            );
-
-            this.poseLandmarker = await window.PoseLandmarker.createFromOptions(vision, {
-                baseOptions: {
-                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-                    delegate: "GPU"
-                },
-                runningMode: "VIDEO",
-                numPoses: 1,
-                minPoseDetectionConfidence: 0.5,
-                minPosePresenceConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-
-            console.log('✅ MediaPipe initialized!');
-        } catch (error) {
-            console.error('❌ MediaPipe initialization failed:', error);
-            throw new Error('Kunde inte initiera pose detection. Kontrollera din internetanslutning.');
-        }
-    }
-
-    async processVideoFrames() {
-        console.log('🎬 Processing video frames...');
-
-        this.poses = [];
-        const video = this.video;
-        const fps = 5; // Process 5 frames per second
-        const interval = 1 / fps;
-
-        // Reset video to start
-        video.currentTime = 0;
-        await new Promise(resolve => {
-            video.onseeked = resolve;
-        });
-
-        // Process frames
-        for (let time = 0; time < video.duration; time += interval) {
-            video.currentTime = time;
-            await new Promise(resolve => video.onseeked = resolve);
-
-            try {
-                const result = this.poseLandmarker.detectForVideo(video, time * 1000);
-
-                if (result.landmarks && result.landmarks.length > 0) {
-                    this.poses.push({
-                        time: time,
-                        landmarks: result.landmarks[0],
-                        worldLandmarks: result.worldLandmarks ? result.worldLandmarks[0] : null
-                    });
-
-                    // Draw pose on canvas (optional visualization)
-                    this.drawPose(result.landmarks[0], time);
-                }
-            } catch (error) {
-                console.warn(`Failed to process frame at ${time}s:`, error);
-            }
+        // Check if TensorFlow is loaded
+        if (typeof poseDetection === 'undefined') {
+            throw new Error('TensorFlow kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
         }
 
-        console.log(`✅ Processed ${this.poses.length} frames`);
-    }
-
-    drawPose(landmarks, time) {
-        // Clear canvas
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Draw connections
-        const connections = [
-            [11, 13], [13, 15], // Left arm
-            [12, 14], [14, 16], // Right arm
-            [11, 12], // Shoulders
-            [11, 23], [12, 24], // Torso
-            [23, 24], // Hips
-            [23, 25], [25, 27], // Left leg
-            [24, 26], [26, 28], // Right leg
-        ];
-
-        this.ctx.strokeStyle = '#2ecc71';
-        this.ctx.lineWidth = 3;
-
-        connections.forEach(([start, end]) => {
-            const startPoint = landmarks[start];
-            const endPoint = landmarks[end];
-
-            if (startPoint && endPoint) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(startPoint.x * this.canvas.width, startPoint.y * this.canvas.height);
-                this.ctx.lineTo(endPoint.x * this.canvas.width, endPoint.y * this.canvas.height);
-                this.ctx.stroke();
-            }
+        // Create detector
+        const model = poseDetection.SupportedModels.MoveNet;
+        detector = await poseDetection.createDetector(model, {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
         });
 
-        // Draw landmarks
-        this.ctx.fillStyle = '#e74c3c';
-        landmarks.forEach(landmark => {
-            this.ctx.beginPath();
-            this.ctx.arc(
-                landmark.x * this.canvas.width,
-                landmark.y * this.canvas.height,
-                5, 0, 2 * Math.PI
-            );
-            this.ctx.fill();
-        });
-    }
-
-    analyzePoses() {
-        console.log('📊 Analyzing poses...');
-
-        const issues = [];
-        const metrics = {};
-
-        // Calculate hip-shoulder separation
-        const separations = this.poses.map(pose => {
-            return this.calculateHipShoulderSeparation(pose.landmarks);
-        });
-
-        const avgSeparation = separations.reduce((a, b) => a + b, 0) / separations.length;
-        metrics.hipShoulderSeparation = Math.round(avgSeparation);
-
-        if (avgSeparation < 15) {
-            issues.push({
-                type: 'hip_shoulder_separation',
-                severity: 'high',
-                title: 'Otillräcklig höft-axel separation',
-                description: `Din genomsnittliga höft-axel separation är ${Math.round(avgSeparation)}°, vilket är under det ideala värdet. Detta begränsar din kraftgenerering.`,
-                value: Math.round(avgSeparation),
-                ideal: '>20°',
-                drills: [
-                    'Höftrotationsövning: Stå med stängd hållning och öva på att rotera höfterna först innan axlarna följer med',
-            'Väggövning: Stå i sidled mot en vägg och öva på att initiera rörelsen från höfterna',
-                    'Medicin-bollskast: Fokusera på att kraftigt rotera höfterna innan överkroppen följer'
-                ]
-            });
-        }
-
-        // Check weight transfer
-        const weightTransferAnalysis = this.analyzeWeightTransfer();
-        if (weightTransferAnalysis.hasIssue) {
-            issues.push({
-                type: 'weight_transfer',
-                severity: 'medium',
-                title: 'Problem med viktöverföring',
-                description: weightTransferAnalysis.description,
-                drills: [
-                    'Stegövning: Öva X-steget långsamt och fokusera på viktöverföringen från bakre till främre fot',
-                    'En-fots balans: Träna att balansera på din främre fot för att stärka stabilitet',
-                    'Kaströrelse utan disc: Öva kastet utan disc för att känna viktöverföringen'
-                ]
-            });
-        }
-
-        // Check arm extension (rounding)
-        const armExtensionAnalysis = this.analyzeArmExtension();
-        metrics.armExtension = armExtensionAnalysis.avgAngle;
-
-        if (armExtensionAnalysis.hasRounding) {
-            issues.push({
-                type: 'rounding',
-                severity: 'high',
-                title: 'Rounding - Armen inte fullt utsträckt',
-                description: `Din arm är inte fullt utsträckt under reach-back, vilket minskar kastlängden och kontrollen.`,
-                drills: [
-                    'Reach-back övning: Öva på att sträcka ut armen helt under reach-back',
-                    'Sträckövningar: Förbättra axelrörlighet med dagliga sträckningar',
-                    'Slow-motion kast: Öva kastet i slow-motion för att fokusera på full armutsträckning'
-                ]
-            });
-        }
-
-        // Calculate release point consistency
-        const releasePoints = this.calculateReleasePoints();
-        metrics.releaseHeight = releasePoints.avgHeight;
-        metrics.releaseVariation = releasePoints.variation;
-
-        // Check timing
-        const timingAnalysis = this.analyzeTimingSequence();
-        metrics.timingScore = timingAnalysis.score;
-
-        if (timingAnalysis.score < 70) {
-            issues.push({
-                type: 'timing',
-                severity: 'medium',
-                title: 'Timing-problem i den kinetiska kedjan',
-                description: 'Din kropps rörelssekvens följer inte optimal ordning (höfter → överkropp → axlar → arm)',
-                drills: [
-                    'Sekvensiell övning: Öva varje del av kastet separat och bygg sedan ihop dem',
-                    'Metronom-träning: Använd en metronom för att träna rätt timing',
-                    'Video-analys: Filma dig själv och jämför med proffs för att se timing-skillnader'
-                ]
-            });
-        }
-
-        // Calculate overall score
-        const score = this.calculateOverallScore(issues, metrics);
-
-        return {
-            score,
-            issues: this.prioritizeIssues(issues),
-            metrics,
-            feedback: this.generateFeedback(score, issues)
-        };
-    }
-
-    calculateHipShoulderSeparation(landmarks) {
-        // Calculate angle between hip line and shoulder line
-        const leftHip = landmarks[23];
-        const rightHip = landmarks[24];
-        const leftShoulder = landmarks[11];
-        const rightShoulder = landmarks[12];
-
-        const hipAngle = Math.atan2(rightHip.y - leftHip.y, rightHip.x - leftHip.x) * 180 / Math.PI;
-        const shoulderAngle = Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x) * 180 / Math.PI;
-
-        return Math.abs(hipAngle - shoulderAngle);
-    }
-
-    analyzeWeightTransfer() {
-        // Analyze ankle position changes to detect weight transfer
-        const leftAnklePositions = this.poses.map(p => p.landmarks[27].x);
-        const rightAnklePositions = this.poses.map(p => p.landmarks[28].x);
-
-        // Calculate weight shift
-        const avgLeftShift = Math.abs(leftAnklePositions[leftAnklePositions.length - 1] - leftAnklePositions[0]);
-        const avgRightShift = Math.abs(rightAnklePositions[rightAnklePositions.length - 1] - rightAnklePositions[0]);
-
-        const hasIssue = (avgLeftShift + avgRightShift) < 0.1;
-
-        return {
-            hasIssue,
-            description: hasIssue
-                ? 'Begränsad viktöverföring detekterad. Du använder inte fullt ut din underkropps kraft.'
-                : 'Bra viktöverföring från bakre till främre fot.'
-        };
-    }
-
-    analyzeArmExtension() {
-        // Calculate elbow angles to detect rounding
-        const elbowAngles = this.poses.map(pose => {
-            const shoulder = pose.landmarks[12]; // Right shoulder
-            const elbow = pose.landmarks[14]; // Right elbow
-            const wrist = pose.landmarks[16]; // Right wrist
-
-            return this.calculateAngle(shoulder, elbow, wrist);
-        });
-
-        const avgAngle = elbowAngles.reduce((a, b) => a + b, 0) / elbowAngles.length;
-        const hasRounding = avgAngle < 140; // Less than 140 degrees indicates rounding
-
-        return {
-            hasRounding,
-            avgAngle: Math.round(avgAngle)
-        };
-    }
-
-    calculateAngle(point1, point2, point3) {
-        const radians = Math.atan2(point3.y - point2.y, point3.x - point2.x) -
-                        Math.atan2(point1.y - point2.y, point1.x - point2.x);
-        let degrees = Math.abs(radians * 180.0 / Math.PI);
-        if (degrees > 180.0) degrees = 360 - degrees;
-        return degrees;
-    }
-
-    calculateReleasePoints() {
-        // Get wrist positions at later frames (likely release)
-        const releaseFrames = this.poses.slice(-5); // Last 5 frames
-        const heights = releaseFrames.map(p => p.landmarks[16].y); // Right wrist
-
-        const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
-        const variation = Math.max(...heights) - Math.min(...heights);
-
-        return {
-            avgHeight: (1 - avgHeight) * 100, // Convert to percentage (0 = bottom, 100 = top)
-            variation: variation * 100
-        };
-    }
-
-    analyzeTimingSequence() {
-        // Simplified timing analysis
-        // In a real implementation, this would analyze the sequence of movements
-
-        // For now, return a score based on hip-shoulder separation
-        const separations = this.poses.map(p => this.calculateHipShoulderSeparation(p.landmarks));
-        const maxSeparation = Math.max(...separations);
-
-        // Good timing correlates with good hip-shoulder separation
-        const score = Math.min(100, maxSeparation * 4);
-
-        return { score: Math.round(score) };
-    }
-
-    calculateOverallScore(issues, metrics) {
-        let score = 100;
-
-        // Deduct points for issues
-        issues.forEach(issue => {
-            if (issue.severity === 'high') score -= 15;
-            else if (issue.severity === 'medium') score -= 10;
-            else score -= 5;
-        });
-
-        // Ensure score doesn't go below 0
-        return Math.max(0, Math.round(score));
-    }
-
-    prioritizeIssues(issues) {
-        const priority = { high: 3, medium: 2, low: 1 };
-        return issues.sort((a, b) => priority[b.severity] - priority[a.severity]);
-    }
-
-    generateFeedback(score, issues) {
-        if (score >= 85) {
-            return 'Excellent form! Din teknik är mycket bra med endast mindre justeringar att göra.';
-        } else if (score >= 70) {
-            return 'God teknik med utrymme för förbättring. Fokusera på de identifierade områdena.';
-        } else if (score >= 50) {
-            return 'Din teknik har flera områden som behöver förbättras. Följ träningsplanen nedan.';
-        } else {
-            return 'Betydande tekniska problem identifierade. Rekommenderar personlig coaching för snabbare framsteg.';
-        }
-    }
-
-    displayResults(analysis) {
-        // Update overall score
-        document.getElementById('overallScore').querySelector('.score-value').textContent = analysis.score;
-        document.getElementById('overallFeedback').textContent = analysis.feedback;
-
-        // Display issues
-        const issuesList = document.getElementById('issuesList');
-        issuesList.innerHTML = '';
-
-        if (analysis.issues.length === 0) {
-            issuesList.innerHTML = '<p style="color: #2ecc71; text-align: center; padding: 2rem;">🎉 Inga stora problem hittade! Din teknik ser bra ut.</p>';
-        } else {
-            analysis.issues.forEach(issue => {
-                const issueCard = document.createElement('div');
-                issueCard.className = `issue-card severity-${issue.severity}`;
-
-                issueCard.innerHTML = `
-                    <div class="issue-header">
-                        <div class="issue-title">${issue.title}</div>
-                        <span class="issue-severity">${issue.severity === 'high' ? 'Hög' : issue.severity === 'medium' ? 'Medel' : 'Låg'}</span>
-                    </div>
-                    <p class="issue-description">${issue.description}</p>
-                    <div class="issue-drills">
-                        <strong>Rekommenderade övningar:</strong>
-                        <ul>
-                            ${issue.drills.map(drill => `<li>${drill}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-
-                issuesList.appendChild(issueCard);
-            });
-        }
-
-        // Display metrics
-        const metricsGrid = document.getElementById('metricsGrid');
-        metricsGrid.innerHTML = '';
-
-        const metricsToDisplay = [
-            { label: 'Höft-Axel Separation', value: `${analysis.metrics.hipShoulderSeparation}°`, ideal: '>20°' },
-            { label: 'Armsträckning', value: `${analysis.metrics.armExtension}°`, ideal: '>140°' },
-            { label: 'Release-höjd', value: `${Math.round(analysis.metrics.releaseHeight)}%`, ideal: '50-70%' },
-            { label: 'Timing Score', value: `${analysis.metrics.timingScore}/100`, ideal: '>70' }
-        ];
-
-        metricsToDisplay.forEach(metric => {
-            const metricCard = document.createElement('div');
-            metricCard.className = 'metric-card';
-            metricCard.innerHTML = `
-                <span class="metric-value">${metric.value}</span>
-                <div class="metric-label">${metric.label}</div>
-                <div class="metric-ideal">Ideal: ${metric.ideal}</div>
-            `;
-            metricsGrid.appendChild(metricCard);
-        });
-
-        // Generate training plan
-        this.generateTrainingPlan(analysis.issues);
-    }
-
-    generateTrainingPlan(issues) {
-        const trainingPlanContent = document.getElementById('trainingPlanContent');
-
-        if (issues.length === 0) {
-            trainingPlanContent.innerHTML = '<p>Din teknik är redan bra! Fortsätt träna regelbundet för att bibehålla formen.</p>';
-            return;
-        }
-
-        // Create a 4-week plan focusing on top issues
-        const plan = `
-            <div class="training-week">
-                <h5>Vecka 1-2: Grundläggande Teknik</h5>
-                <ul>
-                    <li>Slow-motion kast: 10-15 minuter dagligen för att känna rätt rörelse</li>
-                    <li>Fokusövningar för topp-problem (se övningar ovan)</li>
-                    <li>Video dig själv varje träningspass för att se framsteg</li>
-                    <li>Uppvärmning och stretching: 10 minuter före träning</li>
-                </ul>
-            </div>
-            <div class="training-week">
-                <h5>Vecka 3-4: Integration & Hastighet</h5>
-                <ul>
-                    <li>Börja öka kaststyrkan gradvis med fokus på bibehållen teknik</li>
-                    <li>Kombinationsövningar: Integrera alla förbättringar i fullt kast</li>
-                    <li>Spelträning på bana: Applicera ny teknik i verkliga situationer</li>
-                    <li>Fortsätt videoanalys för att säkerställa framsteg</li>
-                </ul>
-            </div>
-            <div class="training-week">
-                <h5>Vecka 5+: Underhåll & Förfining</h5>
-                <ul>
-                    <li>Regelbunden träning 3-4 gånger per vecka</li>
-                    <li>Filma och analysera kastet månadsvis</li>
-                    <li>Överväg personlig coaching för finslipning</li>
-                    <li>Fortsätt arbeta med identifierade problem</li>
-                </ul>
-            </div>
-        `;
-
-        trainingPlanContent.innerHTML = plan;
+        loadingSpinner.classList.remove('active');
+        console.log('TensorFlow Pose Detection initialized successfully');
+        return true;
+    } catch (error) {
+        console.error('Pose detection initialization error:', error);
+        loadingSpinner.classList.remove('active');
+        showAlert('Pose detection kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
+        return false;
     }
 }
 
-// Initialize analyzer when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🥏 Disc Golf Analyzer starting...');
+// Upload area interactions
+uploadArea.addEventListener('click', () => {
+    fileInput.click();
+});
 
-    // Check if MediaPipe is available
-    if (typeof window.FilesetResolver === 'undefined' || typeof window.PoseLandmarker === 'undefined') {
-        console.error('❌ MediaPipe not loaded. Please check your internet connection.');
-        alert('MediaPipe kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('drag-over');
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        handleFileSelect(files[0]);
+    }
+});
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFileSelect(e.target.files[0]);
+    }
+});
+
+// Handle file selection
+async function handleFileSelect(file) {
+    // Validate file
+    if (!file.type.startsWith('video/')) {
+        showAlert('Vänligen välj en videofil');
         return;
     }
 
-    // Create analyzer instance
-    const analyzer = new DiscGolfAnalyzer();
+    if (file.size > 100 * 1024 * 1024) { // 100MB
+        showAlert('Filen är för stor. Max 100MB');
+        return;
+    }
+
+    // Initialize detector if not already done
+    if (!detector) {
+        const initialized = await initPoseDetection();
+        if (!initialized) {
+            return;
+        }
+    }
+
+    // Load video
+    const url = URL.createObjectURL(file);
+    videoElement.src = url;
+
+    videoElement.onloadedmetadata = () => {
+        // Setup canvas
+        canvas = outputCanvas;
+        ctx = canvas.getContext('2d');
+        canvas.width = videoElement.videoWidth;
+        canvas.height = videoElement.videoHeight;
+
+        // Show video and controls
+        uploadArea.style.display = 'none';
+        videoContainer.style.display = 'block';
+        controls.style.display = 'flex';
+
+        // Update status
+        const statusBadge = statusArea.querySelector('.status-badge');
+        statusBadge.textContent = 'Video laddad - Redo att analysera';
+        statusBadge.className = 'status-badge complete';
+    };
+}
+
+// Analyze button
+analyzeBtn.addEventListener('click', async () => {
+    if (isAnalyzing) {
+        return;
+    }
+
+    isAnalyzing = true;
+    poseData = [];
+    analyzeBtn.disabled = true;
+    analyzeBtn.innerHTML = '<span>⏳ Analyserar...</span>';
+
+    // Update status
+    const statusBadge = statusArea.querySelector('.status-badge');
+    statusBadge.textContent = 'Analyserar video...';
+    statusBadge.className = 'status-badge analyzing';
+
+    // Reset video to start
+    videoElement.currentTime = 0;
+    videoElement.play();
+
+    // Process video frames
+    await processVideo();
 });
 
-console.log('📝 Analyzer module loaded');
+// Process video with TensorFlow
+async function processVideo() {
+    return new Promise((resolve) => {
+        let frameCount = 0;
+        const maxFrames = 300; // Limit frames for performance
+
+        const processFrame = async () => {
+            if (videoElement.paused || videoElement.ended || frameCount >= maxFrames) {
+                // Analysis complete
+                videoElement.pause();
+                analyzeResults();
+                resolve();
+                return;
+            }
+
+            try {
+                // Detect pose
+                const poses = await detector.estimatePoses(videoElement);
+
+                if (poses.length > 0) {
+                    const pose = poses[0];
+
+                    // Store pose data
+                    poseData.push({
+                        timestamp: videoElement.currentTime,
+                        keypoints: pose.keypoints,
+                        score: pose.score
+                    });
+
+                    // Draw pose on canvas
+                    drawPose(pose);
+                }
+
+                frameCount++;
+            } catch (error) {
+                console.error('Error processing frame:', error);
+            }
+
+            // Continue processing (sample every 5 frames for performance)
+            if (frameCount % 5 === 0) {
+                setTimeout(() => requestAnimationFrame(processFrame), 50);
+            } else {
+                requestAnimationFrame(processFrame);
+            }
+        };
+
+        processFrame();
+
+        // When video ends
+        videoElement.onended = () => {
+            analyzeResults();
+            resolve();
+        };
+    });
+}
+
+// Draw pose on canvas
+function drawPose(pose) {
+    if (!ctx || !canvas) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw keypoints
+    pose.keypoints.forEach(keypoint => {
+        if (keypoint.score > 0.3) {
+            ctx.beginPath();
+            ctx.arc(keypoint.x, keypoint.y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#FF0000';
+            ctx.fill();
+        }
+    });
+
+    // Draw skeleton connections
+    const connections = [
+        [5, 6], [5, 7], [7, 9], [6, 8], [8, 10], // Arms
+        [5, 11], [6, 12], [11, 12], // Torso
+        [11, 13], [13, 15], [12, 14], [14, 16] // Legs
+    ];
+
+    ctx.strokeStyle = '#00FF00';
+    ctx.lineWidth = 2;
+
+    connections.forEach(([i, j]) => {
+        const kp1 = pose.keypoints[i];
+        const kp2 = pose.keypoints[j];
+
+        if (kp1.score > 0.3 && kp2.score > 0.3) {
+            ctx.beginPath();
+            ctx.moveTo(kp1.x, kp1.y);
+            ctx.lineTo(kp2.x, kp2.y);
+            ctx.stroke();
+        }
+    });
+}
+
+// Analyze results
+function analyzeResults() {
+    if (poseData.length === 0) {
+        showAlert('Kunde inte detektera kroppen i videon. Försök med en tydligare video.');
+        resetAnalysis();
+        return;
+    }
+
+    // Calculate metrics
+    const metrics = calculateMetrics(poseData);
+
+    // Display results
+    displayResults(metrics);
+
+    // Update status
+    const statusBadge = statusArea.querySelector('.status-badge');
+    statusBadge.textContent = 'Analys klar!';
+    statusBadge.className = 'status-badge complete';
+
+    // Show results section
+    analysisResults.classList.add('active');
+
+    // Reset analyze button
+    analyzeBtn.disabled = false;
+    analyzeBtn.innerHTML = '<span>🔍 Analysera igen</span>';
+    isAnalyzing = false;
+
+    console.log('Analysis complete:', metrics);
+}
+
+// Calculate metrics from pose data
+function calculateMetrics(data) {
+    if (data.length === 0) {
+        return null;
+    }
+
+    // Analyze posture
+    const postureScore = analyzePosture(data);
+
+    // Analyze balance
+    const balanceScore = analyzeBalance(data);
+
+    // Analyze hip rotation
+    const hipRotationScore = analyzeHipRotation(data);
+
+    // Analyze arm movement
+    const armScore = analyzeArmMovement(data);
+
+    // Analyze follow through
+    const followThroughScore = analyzeFollowThrough(data);
+
+    return {
+        posture: postureScore,
+        balance: balanceScore,
+        hipRotation: hipRotationScore,
+        arm: armScore,
+        followThrough: followThroughScore
+    };
+}
+
+// Get keypoint by name
+function getKeypoint(keypoints, name) {
+    const keypointMap = {
+        'left_shoulder': 5,
+        'right_shoulder': 6,
+        'left_elbow': 7,
+        'right_elbow': 8,
+        'left_wrist': 9,
+        'right_wrist': 10,
+        'left_hip': 11,
+        'right_hip': 12,
+        'left_knee': 13,
+        'right_knee': 14,
+        'left_ankle': 15,
+        'right_ankle': 16
+    };
+
+    const index = keypointMap[name];
+    return keypoints[index];
+}
+
+// Analyze posture
+function analyzePosture(data) {
+    let goodFrames = 0;
+
+    data.forEach(frame => {
+        const leftShoulder = getKeypoint(frame.keypoints, 'left_shoulder');
+        const leftHip = getKeypoint(frame.keypoints, 'left_hip');
+
+        if (leftShoulder.score > 0.3 && leftHip.score > 0.3) {
+            const angle = Math.abs(leftShoulder.x - leftHip.x);
+            if (angle < 50) { // Relatively aligned
+                goodFrames++;
+            }
+        }
+    });
+
+    const score = (goodFrames / data.length) * 100;
+
+    if (score > 70) {
+        return { score, rating: 'good', text: 'Utmärkt upprätt hållning' };
+    } else if (score > 50) {
+        return { score, rating: 'warning', text: 'Bra hållning, kan förbättras' };
+    } else {
+        return { score, rating: 'error', text: 'Försök hålla ryggen rakare' };
+    }
+}
+
+// Analyze balance
+function analyzeBalance(data) {
+    let stableFrames = 0;
+
+    data.forEach(frame => {
+        const leftAnkle = getKeypoint(frame.keypoints, 'left_ankle');
+        const rightAnkle = getKeypoint(frame.keypoints, 'right_ankle');
+
+        if (leftAnkle.score > 0.3 && rightAnkle.score > 0.3) {
+            const footDistance = Math.abs(leftAnkle.x - rightAnkle.x);
+            if (footDistance > 50 && footDistance < 200) {
+                stableFrames++;
+            }
+        }
+    });
+
+    const score = (stableFrames / data.length) * 100;
+
+    if (score > 70) {
+        return { score, rating: 'good', text: 'Stabil balans genom kastet' };
+    } else if (score > 50) {
+        return { score, rating: 'warning', text: 'Balansen kunde vara bättre' };
+    } else {
+        return { score, rating: 'error', text: 'Arbeta med fotplacering för bättre balans' };
+    }
+}
+
+// Analyze hip rotation
+function analyzeHipRotation(data) {
+    let maxRotation = 0;
+
+    for (let i = 1; i < data.length; i++) {
+        const prev = data[i - 1].keypoints;
+        const curr = data[i].keypoints;
+
+        const prevLeftHip = getKeypoint(prev, 'left_hip');
+        const prevRightHip = getKeypoint(prev, 'right_hip');
+        const currLeftHip = getKeypoint(curr, 'left_hip');
+        const currRightHip = getKeypoint(curr, 'right_hip');
+
+        if (prevLeftHip.score > 0.3 && prevRightHip.score > 0.3 &&
+            currLeftHip.score > 0.3 && currRightHip.score > 0.3) {
+
+            const prevAngle = Math.atan2(prevLeftHip.y - prevRightHip.y, prevLeftHip.x - prevRightHip.x);
+            const currAngle = Math.atan2(currLeftHip.y - currRightHip.y, currLeftHip.x - currRightHip.x);
+
+            const rotation = Math.abs(currAngle - prevAngle);
+            maxRotation = Math.max(maxRotation, rotation);
+        }
+    }
+
+    const score = Math.min((maxRotation / 1.0) * 100, 100);
+
+    if (score > 60) {
+        return { score, rating: 'good', text: 'Bra höftrotation för kraft' };
+    } else if (score > 40) {
+        return { score, rating: 'warning', text: 'Öka höftrotationen för mer kraft' };
+    } else {
+        return { score, rating: 'error', text: 'Fokusera på att rotera höfterna mer' };
+    }
+}
+
+// Analyze arm movement
+function analyzeArmMovement(data) {
+    let goodFrames = 0;
+
+    data.forEach(frame => {
+        const shoulder = getKeypoint(frame.keypoints, 'right_shoulder');
+        const wrist = getKeypoint(frame.keypoints, 'right_wrist');
+
+        if (shoulder.score > 0.3 && wrist.score > 0.3) {
+            const armLength = Math.sqrt(
+                Math.pow(wrist.x - shoulder.x, 2) +
+                Math.pow(wrist.y - shoulder.y, 2)
+            );
+
+            if (armLength > 100) {
+                goodFrames++;
+            }
+        }
+    });
+
+    const score = (goodFrames / data.length) * 100;
+
+    if (score > 60) {
+        return { score, rating: 'good', text: 'Bra armsträckning' };
+    } else if (score > 40) {
+        return { score, rating: 'warning', text: 'Sträck ut armen mer' };
+    } else {
+        return { score, rating: 'error', text: 'Armen behöver sträckas ut mer för maximal kraft' };
+    }
+}
+
+// Analyze follow through
+function analyzeFollowThrough(data) {
+    if (data.length < 10) {
+        return { score: 50, rating: 'warning', text: 'Video för kort för att analysera' };
+    }
+
+    const lastQuarter = data.slice(Math.floor(data.length * 0.75));
+    let followThroughFrames = 0;
+
+    lastQuarter.forEach(frame => {
+        const shoulder = getKeypoint(frame.keypoints, 'right_shoulder');
+        const wrist = getKeypoint(frame.keypoints, 'right_wrist');
+
+        if (shoulder.score > 0.3 && wrist.score > 0.3) {
+            if (wrist.x > shoulder.x) {
+                followThroughFrames++;
+            }
+        }
+    });
+
+    const score = (followThroughFrames / lastQuarter.length) * 100;
+
+    if (score > 50) {
+        return { score, rating: 'good', text: 'Bra uppföljning av kastet' };
+    } else if (score > 30) {
+        return { score, rating: 'warning', text: 'Följ igenom kastet mer' };
+    } else {
+        return { score, rating: 'error', text: 'Viktigt att följa igenom kastet helt' };
+    }
+}
+
+// Display results
+function displayResults(metrics) {
+    if (!metrics) {
+        return;
+    }
+
+    // Update posture
+    const postureMetric = document.getElementById('postureResult').parentElement;
+    postureMetric.className = `metric metric-${metrics.posture.rating}`;
+    document.getElementById('postureResult').textContent = metrics.posture.text;
+
+    // Update balance
+    const balanceMetric = document.getElementById('balanceResult').parentElement;
+    balanceMetric.className = `metric metric-${metrics.balance.rating}`;
+    document.getElementById('balanceResult').textContent = metrics.balance.text;
+
+    // Update hip rotation
+    const hipMetric = document.getElementById('hipRotationResult').parentElement;
+    hipMetric.className = `metric metric-${metrics.hipRotation.rating}`;
+    document.getElementById('hipRotationResult').textContent = metrics.hipRotation.text;
+
+    // Update arm movement
+    const armMetric = document.getElementById('armMovementResult').parentElement;
+    armMetric.className = `metric metric-${metrics.arm.rating}`;
+    document.getElementById('armMovementResult').textContent = metrics.arm.text;
+
+    // Update follow through
+    const followMetric = document.getElementById('followThroughResult').parentElement;
+    followMetric.className = `metric metric-${metrics.followThrough.rating}`;
+    document.getElementById('followThroughResult').textContent = metrics.followThrough.text;
+}
+
+// Reset analysis
+function resetAnalysis() {
+    analyzeBtn.disabled = false;
+    analyzeBtn.innerHTML = '<span>🔍 Analysera</span>';
+    isAnalyzing = false;
+}
+
+// Reset button
+resetBtn.addEventListener('click', () => {
+    // Reset everything
+    videoElement.pause();
+    videoElement.src = '';
+    poseData = [];
+
+    // Hide video and results
+    videoContainer.style.display = 'none';
+    controls.style.display = 'none';
+    analysisResults.classList.remove('active');
+    uploadArea.style.display = 'block';
+
+    // Clear canvas
+    if (ctx && canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Reset status
+    const statusBadge = statusArea.querySelector('.status-badge');
+    statusBadge.textContent = 'Väntar på video';
+    statusBadge.className = 'status-badge pending';
+
+    resetAnalysis();
+});
+
+// Show alert
+function showAlert(message) {
+    // Create alert dialog
+    const alertDiv = document.createElement('div');
+    alertDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        z-index: 10000;
+        max-width: 400px;
+        text-align: center;
+    `;
+
+    alertDiv.innerHTML = `
+        <h3 style="margin-bottom: 1rem; color: #d63031;">Från utformning.github.io:</h3>
+        <p style="margin-bottom: 1.5rem; color: #666;">${message}</p>
+        <button id="alertOkBtn" class="btn btn-primary">OK</button>
+    `;
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(alertDiv);
+
+    // Close on button click
+    document.getElementById('alertOkBtn').addEventListener('click', () => {
+        document.body.removeChild(alertDiv);
+        document.body.removeChild(overlay);
+    });
+}
+
+// Initialize on page load
+window.addEventListener('load', () => {
+    console.log('AI Form Analyzer loaded with TensorFlow.js');
+});
