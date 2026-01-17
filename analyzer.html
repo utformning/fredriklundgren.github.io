@@ -4,8 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="AI Form Analyzer - Analysera din discgolf-kastteknik med AI">
-   rel="stylesheet">
+    <title>AI Form Analyzer - Felix Lundgren</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Dark Mode Variables */
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --bg-tertiary: #3a3a3a;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --accent-primary: #2ecc71;
+            --accent-secondary: #3498db;
+            --border-color: #404040;
+            --shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
         .analyzer-container {
             max-width: 1400px;
             margin: 0 auto;
@@ -18,12 +40,12 @@
         }
 
         .analyzer-header h1 {
-            color: var(--dark-color);
+            color: var(--text-primary);
             margin-bottom: 1rem;
         }
 
         .analyzer-header p {
-            color: var(--text-light);
+            color: var(--text-secondary);
             font-size: 1.2rem;
         }
 
@@ -35,10 +57,11 @@
         }
 
         .video-section {
-            background: var(--white);
+            background: var(--bg-secondary);
             padding: 2rem;
             border-radius: 15px;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow-dark);
+            border: 1px solid var(--border-color);
         }
 
         .video-container {
@@ -67,23 +90,23 @@
         }
 
         .upload-area {
-            border: 3px dashed var(--primary-color);
+            border: 3px dashed var(--accent-primary);
             border-radius: 10px;
             padding: 3rem 2rem;
             text-align: center;
             cursor: pointer;
             transition: var(--transition);
-            background: var(--light-color);
+            background: var(--bg-tertiary);
         }
 
         .upload-area:hover {
-            background: #d5e8d4;
-            border-color: var(--primary-dark);
+            background: #404040;
+            border-color: var(--accent-primary);
         }
 
         .upload-area.drag-over {
-            background: #c8e6c9;
-            border-color: var(--primary-dark);
+            background: #404040;
+            border-color: var(--accent-primary);
         }
 
         .upload-icon {
@@ -104,32 +127,38 @@
         }
 
         .analysis-section {
-            background: var(--white);
+            background: var(--bg-secondary);
             padding: 2rem;
             border-radius: 15px;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow-dark);
+            border: 1px solid var(--border-color);
         }
 
         .analysis-section h2 {
-            color: var(--dark-color);
+            color: var(--text-primary);
             margin-bottom: 1.5rem;
             font-size: 1.8rem;
         }
 
         .feature-card {
-            background: var(--light-color);
+            background: var(--bg-tertiary);
             padding: 1.5rem;
             border-radius: 10px;
             margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
         }
 
         .feature-card h3 {
-            color: var(--primary-color);
+            color: var(--accent-primary);
             font-size: 1.2rem;
             margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
         }
 
         .feature-icon {
@@ -175,22 +204,85 @@
         }
 
         .metric {
-            padding: 1rem;
-            background: var(--white);
-            border-left: 4px solid var(--primary-color);
-            margin-bottom: 1rem;
+            padding: 1.5rem;
+            background: var(--bg-tertiary);
+            border-left: 4px solid var(--accent-primary);
+            margin-bottom: 1.5rem;
             border-radius: 5px;
+            border: 1px solid var(--border-color);
         }
 
         .metric-label {
             font-weight: 600;
-            color: var(--dark-color);
-            margin-bottom: 0.25rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
         }
 
         .metric-value {
-            font-size: 1.1rem;
-            color: var(--text-light);
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .metric-details {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .metric-frames {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .metric-frame {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+        }
+
+        .metric-frame img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .metric-frame-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 0.5rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .reference-image {
+            margin-top: 1rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid var(--accent-secondary);
+        }
+
+        .reference-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .reference-caption {
+            background: var(--bg-primary);
+            padding: 0.75rem;
+            color: var(--accent-secondary);
+            font-size: 0.9rem;
+            text-align: center;
+            font-weight: 600;
         }
 
         .metric-good {
