@@ -10,6 +10,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Dark Mode Variables */
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --bg-tertiary: #3a3a3a;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --accent-primary: #2ecc71;
+            --accent-secondary: #3498db;
+            --border-color: #404040;
+            --shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
         .analyzer-container {
             max-width: 1400px;
             margin: 0 auto;
@@ -22,12 +40,12 @@
         }
 
         .analyzer-header h1 {
-            color: var(--dark-color);
+            color: var(--text-primary);
             margin-bottom: 1rem;
         }
 
         .analyzer-header p {
-            color: var(--text-light);
+            color: var(--text-secondary);
             font-size: 1.2rem;
         }
 
@@ -39,10 +57,11 @@
         }
 
         .video-section {
-            background: var(--white);
+            background: var(--bg-secondary);
             padding: 2rem;
             border-radius: 15px;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow-dark);
+            border: 1px solid var(--border-color);
         }
 
         .video-container {
@@ -71,23 +90,23 @@
         }
 
         .upload-area {
-            border: 3px dashed var(--primary-color);
+            border: 3px dashed var(--accent-primary);
             border-radius: 10px;
             padding: 3rem 2rem;
             text-align: center;
             cursor: pointer;
             transition: var(--transition);
-            background: var(--light-color);
+            background: var(--bg-tertiary);
         }
 
         .upload-area:hover {
-            background: #d5e8d4;
-            border-color: var(--primary-dark);
+            background: #404040;
+            border-color: var(--accent-primary);
         }
 
         .upload-area.drag-over {
-            background: #c8e6c9;
-            border-color: var(--primary-dark);
+            background: #404040;
+            border-color: var(--accent-primary);
         }
 
         .upload-icon {
@@ -108,32 +127,38 @@
         }
 
         .analysis-section {
-            background: var(--white);
+            background: var(--bg-secondary);
             padding: 2rem;
             border-radius: 15px;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow-dark);
+            border: 1px solid var(--border-color);
         }
 
         .analysis-section h2 {
-            color: var(--dark-color);
+            color: var(--text-primary);
             margin-bottom: 1.5rem;
             font-size: 1.8rem;
         }
 
         .feature-card {
-            background: var(--light-color);
+            background: var(--bg-tertiary);
             padding: 1.5rem;
             border-radius: 10px;
             margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
         }
 
         .feature-card h3 {
-            color: var(--primary-color);
+            color: var(--accent-primary);
             font-size: 1.2rem;
             margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
         }
 
         .feature-icon {
@@ -179,22 +204,85 @@
         }
 
         .metric {
-            padding: 1rem;
-            background: var(--white);
-            border-left: 4px solid var(--primary-color);
-            margin-bottom: 1rem;
+            padding: 1.5rem;
+            background: var(--bg-tertiary);
+            border-left: 4px solid var(--accent-primary);
+            margin-bottom: 1.5rem;
             border-radius: 5px;
+            border: 1px solid var(--border-color);
         }
 
         .metric-label {
             font-weight: 600;
-            color: var(--dark-color);
-            margin-bottom: 0.25rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
         }
 
         .metric-value {
-            font-size: 1.1rem;
-            color: var(--text-light);
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .metric-details {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .metric-frames {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .metric-frame {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+        }
+
+        .metric-frame img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .metric-frame-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 0.5rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .reference-image {
+            margin-top: 1rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid var(--accent-secondary);
+        }
+
+        .reference-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .reference-caption {
+            background: var(--bg-primary);
+            padding: 0.75rem;
+            color: var(--accent-secondary);
+            font-size: 0.9rem;
+            text-align: center;
+            font-weight: 600;
         }
 
         .metric-good {
@@ -252,6 +340,12 @@
             }
         }
     </style>
+    <title>AI Form Analyzer - Felix Lundgren Discgolf</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/analyzer.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Navigation -->
@@ -275,7 +369,6 @@
             </button>
         </div>
     </nav>
-
     <!-- Main Content -->
     <div class="analyzer-container">
         <div class="analyzer-header">
@@ -366,11 +459,149 @@
                     <div class="metric metric-good">
                         <div class="metric-label">Uppföljning</div>
                         <div class="metric-value" id="followThroughResult">Analyserar...</div>
+    <!-- Hero Section -->
+    <section class="analyzer-hero">
+        <div class="container">
+            <h1>🎯 AI Form Analyzer</h1>
+            <p class="hero-description">Ladda upp en video av ditt kast och få detaljerad AI-analys av din teknik</p>
+            <div class="features-quick">
+                <span>✓ Pose Detection</span>
+                <span>✓ Teknikanalys</span>
+                <span>✓ Personlig Träningsplan</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Analyzer Section -->
+    <section class="analyzer-section">
+        <div class="container">
+            <div class="analyzer-grid">
+                <!-- Upload Area -->
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-content">
+                        <div class="upload-icon">📹</div>
+                        <h3>Ladda upp din video</h3>
+                        <p>Dra och släpp eller klicka för att välja en video</p>
+                        <input type="file" id="videoInput" accept="video/*" hidden>
+                        <button class="btn btn-primary" id="uploadBtn">Välj Video</button>
+                        <div class="upload-info">
+                            <small>Stödjer MP4, MOV, WebM • Max 100MB</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Player -->
+                <div class="video-container" id="videoContainer" style="display: none;">
+                    <div class="video-wrapper">
+                        <video id="videoPlayer" controls></video>
+                        <canvas id="poseCanvas"></canvas>
+                    </div>
+                    <div class="video-controls">
+                        <button class="btn btn-secondary" id="changeVideoBtn">Byt Video</button>
+                        <button class="btn btn-primary" id="analyzeBtn">
+                            <span class="btn-text">Analysera Video</span>
+                            <span class="btn-loader" style="display: none;">⏳ Analyserar...</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="results-container" id="resultsContainer" style="display: none;">
+                    <h3>📊 Analysresultat</h3>
+
+                    <!-- Overall Score -->
+                    <div class="score-card">
+                        <div class="score-circle" id="overallScore">
+                            <span class="score-value">--</span>
+                            <span class="score-label">Poäng</span>
+                        </div>
+                        <div class="score-details">
+                            <h4>Övergripande Bedömning</h4>
+                            <p id="overallFeedback">Analyserar din form...</p>
+                        </div>
+                    </div>
+
+                    <!-- Issues Found -->
+                    <div class="issues-section">
+                        <h4>⚠️ Identifierade Problem</h4>
+                        <div id="issuesList" class="issues-list">
+                            <!-- Issues will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Metrics -->
+                    <div class="metrics-section">
+                        <h4>📈 Tekniska Mätningar</h4>
+                        <div id="metricsGrid" class="metrics-grid">
+                            <!-- Metrics will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Training Plan -->
+                    <div class="training-plan">
+                        <h4>💪 Personlig Träningsplan</h4>
+                        <div id="trainingPlanContent">
+                            <!-- Training plan will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- AI Insights -->
+                    <div class="ai-insights" id="aiInsights" style="display: none;">
+                        <h4>🤖 AI-genererade Insikter</h4>
+                        <div id="aiInsightsContent" class="insights-content">
+                            <!-- AI insights will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- How It Works -->
+            <div class="how-it-works">
+                <h3>Hur det fungerar</h3>
+                <div class="steps-grid">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h4>Ladda upp video</h4>
+                        <p>Filma ditt backhand eller forehand kast från sidan</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h4>AI analyserar</h4>
+                        <p>MediaPipe detekterar din pose och mäter vinklar och timing</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <h4>Få feedback</h4>
+                        <p>Prioriterade problem och specifika övningar för förbättring</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="filming-tips">
+                <h3>📸 Tips för bästa resultat</h3>
+                <div class="tips-grid">
+                    <div class="tip">
+                        <span class="tip-icon">📐</span>
+                        <p><strong>Kameravinkel:</strong> Filma från sidan i 90° vinkel</p>
+                    </div>
+                    <div class="tip">
+                        <span class="tip-icon">👤</span>
+                        <p><strong>Hel kropp:</strong> Se till att hela kroppen syns i bild</p>
+                    </div>
+                    <div class="tip">
+                        <span class="tip-icon">☀️</span>
+                        <p><strong>Belysning:</strong> Filma i bra ljus, undvik motljus</p>
+                    </div>
+                    <div class="tip">
+                        <span class="tip-icon">🎥</span>
+                        <p><strong>Kvalitet:</strong> HD-upplösning eller högre rekommenderas</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    </section>
 
     <!-- Footer -->
     <footer class="footer">
@@ -401,6 +632,11 @@
 
     <!-- Main Script -->
     <script src="js/analyzer.js"></script>
+    <!-- Load MediaPipe first -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js" crossorigin="anonymous"></script>
+
+    <!-- Load our analyzer script -->
+    <script type="module" src="js/analyzer.js"></script>
     <script src="js/script.js"></script>
 </body>
 </html>
