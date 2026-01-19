@@ -653,58 +653,83 @@ function getDetailedFollowThroughAnalysis(followThrough) {
     }
 }
 
-// Reference image functions (using SVG or external links)
+// Reference image functions (using instructional text instead)
 function getPostureReference() {
     return `
-        <div class="reference-image">
-            <img src="https://www.innovadiscs.com/wp-content/uploads/2019/10/disc-golf-throwing-form-posture.jpg"
-                 alt="Correct posture"
-                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzNhM2EzYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSIjYjBiMGIwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPktvbW1lciHDpHI6IFJlZmVyZW5zYmlsZDwvdGV4dD48L3N2Zz4='">
-            <div class="reference-caption">✓ Så här ska din kroppshållning se ut</div>
+        <div class="reference-image" style="background: var(--bg-primary); border: 2px solid var(--accent-secondary); padding: 1.5rem; border-radius: 8px;">
+            <div class="reference-caption" style="text-align: left; padding: 0;">
+                <h4 style="color: var(--accent-secondary); margin-bottom: 1rem;">✓ Så här ska din kroppshållning se ut:</h4>
+                <ul style="color: var(--text-secondary); margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                    <li><strong>Rygg:</strong> Håll ryggen rak och upprätt genom hela kastet</li>
+                    <li><strong>Axlar:</strong> Axlarna ska vara balanserade, inte lutande åt något håll</li>
+                    <li><strong>Huvud:</strong> Titta mot målet, håll huvudet stabilt</li>
+                    <li><strong>Överkropp:</strong> Rotera från höfterna, inte från ryggen</li>
+                </ul>
+            </div>
         </div>
     `;
 }
 
 function getBalanceReference() {
     return `
-        <div class="reference-image">
-            <img src="https://www.innovadiscs.com/wp-content/uploads/2019/10/disc-golf-balance-stance.jpg"
-                 alt="Correct stance"
-                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzNhM2EzYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSIjYjBiMGIwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPktvcnJla3Qgc3TDpGxsbmluZzwvdGV4dD48L3N2Zz4='">
-            <div class="reference-caption">✓ Optimal fotplacering för balans</div>
+        <div class="reference-image" style="background: var(--bg-primary); border: 2px solid var(--accent-secondary); padding: 1.5rem; border-radius: 8px;">
+            <div class="reference-caption" style="text-align: left; padding: 0;">
+                <h4 style="color: var(--accent-secondary); margin-bottom: 1rem;">✓ Optimal fotplacering för balans:</h4>
+                <ul style="color: var(--text-secondary); margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                    <li><strong>Ställning:</strong> Fötter axelbrett isär (ca 30-40 cm)</li>
+                    <li><strong>Vikt:</strong> Jämnt fördelad på båda fötterna initialt</li>
+                    <li><strong>Knän:</strong> Lätt böjda för stabilitet och flexibilitet</li>
+                    <li><strong>Framfot:</strong> Peka mot kasthållet för optimal kraftöverföring</li>
+                </ul>
+            </div>
         </div>
     `;
 }
 
 function getHipRotationReference() {
     return `
-        <div class="reference-image">
-            <img src="https://www.innovadiscs.com/wp-content/uploads/2019/10/disc-golf-hip-rotation.jpg"
-                 alt="Hip rotation"
-                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzNhM2EzYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSIjYjBiMGIwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPktyYWZ0ZnVsbCBow7ZmdHJvdGF0aW9uPC90ZXh0Pjwvc3ZnPg=='">
-            <div class="reference-caption">✓ Så ska höfterna rotera för maximal kraft</div>
+        <div class="reference-image" style="background: var(--bg-primary); border: 2px solid var(--accent-secondary); padding: 1.5rem; border-radius: 8px;">
+            <div class="reference-caption" style="text-align: left; padding: 0;">
+                <h4 style="color: var(--accent-secondary); margin-bottom: 1rem;">✓ Kraftfull höftrotation:</h4>
+                <ul style="color: var(--text-secondary); margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                    <li><strong>Start:</strong> Höfterna pekar bort från målet (180° rotation)</li>
+                    <li><strong>Rörelse:</strong> Initiera kastet genom att rotera höfterna explosivt</li>
+                    <li><strong>Sekvens:</strong> Höfter → Överkropp → Axel → Arm → Hand</li>
+                    <li><strong>Slut:</strong> Höfterna pekar mot målet vid release</li>
+                </ul>
+            </div>
         </div>
     `;
 }
 
 function getArmMovementReference() {
     return `
-        <div class="reference-image">
-            <img src="https://www.innovadiscs.com/wp-content/uploads/2019/10/disc-golf-arm-extension.jpg"
-                 alt="Arm extension"
-                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzNhM2EzYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSIjYjBiMGIwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPktyb3JyZWt0IGFybXN0csOkY2tuaW5nPC90ZXh0Pjwvc3ZnPg=='">
-            <div class="reference-caption">✓ Optimal armsträckning under kastet</div>
+        <div class="reference-image" style="background: var(--bg-primary); border: 2px solid var(--accent-secondary); padding: 1.5rem; border-radius: 8px;">
+            <div class="reference-caption" style="text-align: left; padding: 0;">
+                <h4 style="color: var(--accent-secondary); margin-bottom: 1rem;">✓ Optimal armsträckning:</h4>
+                <ul style="color: var(--text-secondary); margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                    <li><strong>Reach back:</strong> Sträck armen långt bakåt, men avslappnat</li>
+                    <li><strong>Sträckning:</strong> Håll armen relativt rak som ett "slagträ"</li>
+                    <li><strong>Armbåge:</strong> Lätt böjd (160-170°), inte helt stel</li>
+                    <li><strong>Handledsledning:</strong> Handleden följer armen naturligt, inte vriden</li>
+                </ul>
+            </div>
         </div>
     `;
 }
 
 function getFollowThroughReference() {
     return `
-        <div class="reference-image">
-            <img src="https://www.innovadiscs.com/wp-content/uploads/2019/10/disc-golf-follow-through.jpg"
-                 alt="Follow through"
-                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzNhM2EzYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSIjYjBiMGIwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPktvbXBsZXR0IHVwcGbDtmxqbmluZzwvdGV4dD48L3N2Zz4='">
-            <div class="reference-caption">✓ Komplett uppföljning för maximal kraft</div>
+        <div class="reference-image" style="background: var(--bg-primary); border: 2px solid var(--accent-secondary); padding: 1.5rem; border-radius: 8px;">
+            <div class="reference-caption" style="text-align: left; padding: 0;">
+                <h4 style="color: var(--accent-secondary); margin-bottom: 1rem;">✓ Komplett uppföljning:</h4>
+                <ul style="color: var(--text-secondary); margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                    <li><strong>Släpp loss:</strong> Låt armen fortsätta naturligt efter release</li>
+                    <li><strong>Rotation:</strong> Armen ska svepa minst 180° runt kroppen</li>
+                    <li><strong>Balans:</strong> Behåll balansen genom hela uppföljningen</li>
+                    <li><strong>Kroppsvikt:</strong> Hela vikten ska föras framåt mot målet</li>
+                </ul>
+            </div>
         </div>
     `;
 }
