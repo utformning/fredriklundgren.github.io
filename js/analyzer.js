@@ -259,6 +259,8 @@ function captureKeyFrame(pose, timestamp) {
     const armExtensionScore = calculateArmExtensionScore(pose.keypoints);
     const hipRotationScore = pose.keypoints.length > 0 ? 50 : 0; // Simplified for now
     const postureScore = calculatePostureScore(pose.keypoints);
+    const reachbackScore = calculateReachbackScore(pose.keypoints);
+    const powerPocketScore = calculatePowerPocketScore(pose.keypoints);
 
     // Capture canvas image with pose overlay
     const frameImage = canvas.toDataURL('image/png');
@@ -289,6 +291,39 @@ function captureKeyFrame(pose, timestamp) {
             score: postureScore,
             pose: pose
         };
+    }
+
+    // Capture reachback moment
+    if (!keyFrames.reachback || reachbackScore > (keyFrames.reachback.score || 0)) {
+        keyFrames.reachback = {
+            image: frameImage,
+            timestamp: timestamp,
+            score: reachbackScore,
+            pose: pose
+        };
+    }
+
+    // Capture power pocket moment
+    if (!keyFrames.powerPocket || powerPocketScore > (keyFrames.powerPocket.score || 0)) {
+        keyFrames.powerPocket = {
+            image: frameImage,
+            timestamp: timestamp,
+            score: powerPocketScore,
+            pose: pose
+        };
+    }
+
+    // Capture follow-through (last 25% of video)
+    const videoProgress = timestamp / videoElement.duration;
+    if (videoProgress > 0.75 && armExtensionScore > 50) {
+        if (!keyFrames.followThrough || armExtensionScore > (keyFrames.followThrough.score || 0)) {
+            keyFrames.followThrough = {
+                image: frameImage,
+                timestamp: timestamp,
+                score: armExtensionScore,
+                pose: pose
+            };
+        }
     }
 
     // Store all frames for replay
@@ -339,6 +374,44 @@ function calculatePostureScore(keypoints) {
     if (leftShoulder.score > 0.3 && leftHip.score > 0.3) {
         const angle = Math.abs(leftShoulder.x - leftHip.x);
         if (angle < 50) {
+            return 100;
+        }
+        return 50;
+    }
+    return 0;
+}
+
+// Calculate reachback score - when arm is extended back
+function calculateReachbackScore(keypoints) {
+    const shoulder = getKeypoint(keypoints, 'right_shoulder');
+    const wrist = getKeypoint(keypoints, 'right_wrist');
+
+    if (shoulder.score > 0.3 && wrist.score > 0.3) {
+        // Check if wrist is behind shoulder (reachback)
+        if (wrist.x < shoulder.x - 100) {
+            const distance = shoulder.x - wrist.x;
+            return Math.min((distance / 200) * 100, 100);
+        }
+    }
+    return 0;
+}
+
+// Calculate power pocket score - when arm is pulled in close before release
+function calculatePowerPocketScore(keypoints) {
+    const shoulder = getKeypoint(keypoints, 'right_shoulder');
+    const elbow = getKeypoint(keypoints, 'right_elbow');
+    const wrist = getKeypoint(keypoints, 'right_wrist');
+
+    if (shoulder.score > 0.3 && elbow.score > 0.3 && wrist.score > 0.3) {
+        // Power pocket: elbow pulled in, wrist close to chest
+        const elbowToShoulder = Math.abs(elbow.x - shoulder.x);
+        const wristToShoulder = Math.sqrt(
+            Math.pow(wrist.x - shoulder.x, 2) +
+            Math.pow(wrist.y - shoulder.y, 2)
+        );
+
+        // Check if arm is compact (power pocket position)
+        if (elbowToShoulder < 100 && wristToShoulder < 150) {
             return 100;
         }
         return 50;
@@ -765,10 +838,13 @@ function displayKeyFramesGallery() {
         <p style="color: var(--text-secondary); margin-bottom: 2rem;">
             Här är de viktigaste ögonblicken från ditt kast med AI pose detection markerad:
         </p>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
-            ${createKeyFrameCard('bestBalance', '⚖️ Bästa Balans', 'Detta är momentet när din balans var som bäst')}
-            ${createKeyFrameCard('fullArmExtension', '💪 Maximal Armsträckning', 'Här är armen fullt utsträckt för maximal kraft')}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+            ${createKeyFrameCard('reachback', '↩️ Reachback', 'Armen är maximalt utsträckt bakåt, redo för kastet')}
+            ${createKeyFrameCard('powerPocket', '⚡ Power Pocket', 'Armen dras in mot kroppen för maximal kraftöverföring')}
             ${createKeyFrameCard('bestPosture', '🎯 Bästa Hållning', 'Din kroppshållning är optimal i detta ögonblick')}
+            ${createKeyFrameCard('bestBalance', '⚖️ Bästa Balans', 'Detta är momentet när din balans var som bäst')}
+            ${createKeyFrameCard('fullArmExtension', '💪 Release', 'Armen är fullt utsträckt vid release för maximal kraft')}
+            ${createKeyFrameCard('followThrough', '🎬 Follow Through', 'Din uppföljning efter release')}
         </div>
     `;
 }
