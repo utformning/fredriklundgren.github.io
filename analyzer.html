@@ -38,6 +38,30 @@
             margin-bottom: 2rem;
         }
 
+        /* Results Layout with Sidebar */
+        .results-layout {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .metrics-sidebar {
+            background: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+
+        .main-analysis-area {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
         .video-section {
             background: var(--white);
             padding: 2rem;

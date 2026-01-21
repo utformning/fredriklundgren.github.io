@@ -10,6 +10,8 @@ let keyFrames = {
     fullArmExtension: null,
     maxHipRotation: null,
     bestPosture: null,
+    reachback: null,
+    powerPocket: null,
     followThrough: null
 };
 let capturedFrames = [];
