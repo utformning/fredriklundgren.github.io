@@ -4,6 +4,7 @@ let video = null;
 let canvas = null;
 let ctx = null;
 let isAnalyzing = false;
+let showAIOverlay = true; // Toggle for showing/hiding AI pose overlay
 let poseData = [];
 let keyFrames = {
     bestBalance: null,
@@ -25,6 +26,7 @@ const outputCanvas = document.getElementById('outputCanvas');
 const controls = document.getElementById('controls');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const resetBtn = document.getElementById('resetBtn');
+const toggleOverlayBtn = document.getElementById('toggleOverlayBtn');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const statusArea = document.getElementById('statusArea');
 const analysisResults = document.getElementById('analysisResults');
@@ -218,6 +220,9 @@ function drawPose(pose) {
     if (!ctx || !canvas) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Check if overlay should be shown
+    if (!showAIOverlay) return;
 
     // Draw keypoints
     pose.keypoints.forEach(keypoint => {
@@ -1013,6 +1018,33 @@ resetBtn.addEventListener('click', () => {
     statusBadge.className = 'status-badge pending';
 
     resetAnalysis();
+});
+
+// Toggle AI overlay button
+toggleOverlayBtn.addEventListener('click', () => {
+    showAIOverlay = !showAIOverlay;
+
+    // Update button text and style
+    if (showAIOverlay) {
+        toggleOverlayBtn.innerHTML = '<span>👁️ Dölj AI-punkter</span>';
+        toggleOverlayBtn.style.background = 'var(--primary-color)';
+    } else {
+        toggleOverlayBtn.innerHTML = '<span>👁️‍🗨️ Visa AI-punkter</span>';
+        toggleOverlayBtn.style.background = 'var(--text-light)';
+    }
+
+    // Redraw current frame with or without overlay
+    if (poseData.length > 0 && videoElement.currentTime > 0) {
+        const currentTime = videoElement.currentTime;
+        const closestPose = poseData.find(p => Math.abs(p.timestamp - currentTime) < 0.1);
+        if (closestPose) {
+            const pose = {
+                keypoints: closestPose.keypoints,
+                score: closestPose.score
+            };
+            drawPose(pose);
+        }
+    }
 });
 
 // Show alert
