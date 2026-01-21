@@ -31,6 +31,18 @@ const loadingSpinner = document.getElementById('loadingSpinner');
 const statusArea = document.getElementById('statusArea');
 const analysisResults = document.getElementById('analysisResults');
 
+// Custom video player controls
+const videoControls = document.getElementById('videoControls');
+const playPauseBtn = document.getElementById('playPauseBtn');
+const playPauseIcon = document.getElementById('playPauseIcon');
+const frameBackBtn = document.getElementById('frameBackBtn');
+const frameForwardBtn = document.getElementById('frameForwardBtn');
+const progressBar = document.getElementById('progressBar');
+const progressFilled = document.getElementById('progressFilled');
+const timeDisplay = document.getElementById('timeDisplay');
+const speedControl = document.getElementById('speedControl');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+
 // Initialize TensorFlow.js Pose Detection
 async function initPoseDetection() {
     try {
@@ -1044,6 +1056,74 @@ toggleOverlayBtn.addEventListener('click', () => {
             };
             drawPose(pose);
         }
+    }
+});
+
+// Custom Video Player Controls
+
+// Play/Pause button
+playPauseBtn.addEventListener('click', () => {
+    if (videoElement.paused) {
+        videoElement.play();
+        playPauseIcon.textContent = '⏸️';
+    } else {
+        videoElement.pause();
+        playPauseIcon.textContent = '▶️';
+    }
+});
+
+// Update play/pause icon when video state changes
+videoElement.addEventListener('play', () => {
+    playPauseIcon.textContent = '⏸️';
+});
+
+videoElement.addEventListener('pause', () => {
+    playPauseIcon.textContent = '▶️';
+});
+
+// Frame navigation
+frameBackBtn.addEventListener('click', () => {
+    videoElement.currentTime = Math.max(0, videoElement.currentTime - (1/30)); // Go back 1 frame (assuming 30fps)
+});
+
+frameForwardBtn.addEventListener('click', () => {
+    videoElement.currentTime = Math.min(videoElement.duration, videoElement.currentTime + (1/30)); // Go forward 1 frame
+});
+
+// Progress bar
+progressBar.addEventListener('click', (e) => {
+    const rect = progressBar.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    videoElement.currentTime = pos * videoElement.duration;
+});
+
+// Update progress bar as video plays
+videoElement.addEventListener('timeupdate', () => {
+    const percent = (videoElement.currentTime / videoElement.duration) * 100;
+    progressFilled.style.width = percent + '%';
+
+    // Update time display
+    const currentMinutes = Math.floor(videoElement.currentTime / 60);
+    const currentSeconds = Math.floor(videoElement.currentTime % 60);
+    const durationMinutes = Math.floor(videoElement.duration / 60);
+    const durationSeconds = Math.floor(videoElement.duration % 60);
+
+    timeDisplay.textContent = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')} / ${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
+});
+
+// Speed control
+speedControl.addEventListener('change', (e) => {
+    videoElement.playbackRate = parseFloat(e.target.value);
+});
+
+// Fullscreen button
+fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+        videoContainer.requestFullscreen().catch(err => {
+            console.error('Fullscreen error:', err);
+        });
+    } else {
+        document.exitFullscreen();
     }
 });
 
