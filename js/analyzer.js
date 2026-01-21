@@ -5,6 +5,14 @@ let canvas = null;
 let ctx = null;
 let isAnalyzing = false;
 let poseData = [];
+let keyFrames = {
+    bestBalance: null,
+    fullArmExtension: null,
+    maxHipRotation: null,
+    bestPosture: null,
+    followThrough: null
+};
+let capturedFrames = [];
 
 // DOM Elements
 const uploadArea = document.getElementById('uploadArea');
@@ -175,6 +183,9 @@ async function processVideo() {
 
                     // Draw pose on canvas
                     drawPose(pose);
+
+                    // Capture frame with pose overlay for analysis
+                    captureKeyFrame(pose, videoElement.currentTime);
                 }
 
                 frameCount++;
@@ -239,6 +250,100 @@ function drawPose(pose) {
     });
 }
 
+// Capture key frames during analysis
+function captureKeyFrame(pose, timestamp) {
+    // Calculate scores for this frame
+    const balanceScore = calculateBalanceScore(pose.keypoints);
+    const armExtensionScore = calculateArmExtensionScore(pose.keypoints);
+    const hipRotationScore = pose.keypoints.length > 0 ? 50 : 0; // Simplified for now
+    const postureScore = calculatePostureScore(pose.keypoints);
+
+    // Capture canvas image with pose overlay
+    const frameImage = canvas.toDataURL('image/png');
+
+    // Store if it's a key moment
+    if (!keyFrames.bestBalance || balanceScore > (keyFrames.bestBalance.score || 0)) {
+        keyFrames.bestBalance = {
+            image: frameImage,
+            timestamp: timestamp,
+            score: balanceScore,
+            pose: pose
+        };
+    }
+
+    if (!keyFrames.fullArmExtension || armExtensionScore > (keyFrames.fullArmExtension.score || 0)) {
+        keyFrames.fullArmExtension = {
+            image: frameImage,
+            timestamp: timestamp,
+            score: armExtensionScore,
+            pose: pose
+        };
+    }
+
+    if (!keyFrames.bestPosture || postureScore > (keyFrames.bestPosture.score || 0)) {
+        keyFrames.bestPosture = {
+            image: frameImage,
+            timestamp: timestamp,
+            score: postureScore,
+            pose: pose
+        };
+    }
+
+    // Store all frames for replay
+    if (capturedFrames.length < 100) { // Limit to 100 frames for performance
+        capturedFrames.push({
+            image: frameImage,
+            timestamp: timestamp,
+            pose: pose
+        });
+    }
+}
+
+// Calculate balance score for a single frame
+function calculateBalanceScore(keypoints) {
+    const leftAnkle = getKeypoint(keypoints, 'left_ankle');
+    const rightAnkle = getKeypoint(keypoints, 'right_ankle');
+
+    if (leftAnkle.score > 0.3 && rightAnkle.score > 0.3) {
+        const footDistance = Math.abs(leftAnkle.x - rightAnkle.x);
+        if (footDistance > 50 && footDistance < 200) {
+            return 100;
+        }
+        return 50;
+    }
+    return 0;
+}
+
+// Calculate arm extension score for a single frame
+function calculateArmExtensionScore(keypoints) {
+    const shoulder = getKeypoint(keypoints, 'right_shoulder');
+    const wrist = getKeypoint(keypoints, 'right_wrist');
+
+    if (shoulder.score > 0.3 && wrist.score > 0.3) {
+        const armLength = Math.sqrt(
+            Math.pow(wrist.x - shoulder.x, 2) +
+            Math.pow(wrist.y - shoulder.y, 2)
+        );
+        return Math.min((armLength / 150) * 100, 100);
+    }
+    return 0;
+}
+
+// Calculate posture score for a single frame
+function calculatePostureScore(keypoints) {
+    const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
+    const leftHip = getKeypoint(keypoints, 'left_hip');
+
+    if (leftShoulder.score > 0.3 && leftHip.score > 0.3) {
+        const angle = Math.abs(leftShoulder.x - leftHip.x);
+        if (angle < 50) {
+            return 100;
+        }
+        return 50;
+    }
+    return 0;
+}
+
 // Analyze results
 function analyzeResults() {
     if (poseData.length === 0) {
@@ -252,6 +357,12 @@ function analyzeResults() {
 
     // Display results
     displayResults(metrics);
+
+    // Display key frames gallery
+    displayKeyFramesGallery();
+
+    // Add replay functionality
+    addReplayButton();
 
     // Update status
     const statusBadge = statusArea.querySelector('.status-badge');
@@ -626,6 +737,165 @@ function getOverallFeedback(score) {
     }
 }
 
+// Display key frames gallery
+function displayKeyFramesGallery() {
+    // Check if gallery already exists
+    let gallerySection = document.getElementById('keyFramesGallery');
+
+    if (!gallerySection) {
+        // Create gallery section
+        gallerySection = document.createElement('div');
+        gallerySection.id = 'keyFramesGallery';
+        gallerySection.style.cssText = `
+            margin-top: 3rem;
+            padding: 2rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        `;
+        analysisResults.appendChild(gallerySection);
+    }
+
+    gallerySection.innerHTML = `
+        <h3 style="color: var(--primary-color); margin-bottom: 1.5rem; font-size: 1.5rem;">
+            📸 Nyckelmoment från din analys
+        </h3>
+        <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+            Här är de viktigaste ögonblicken från ditt kast med AI pose detection markerad:
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+            ${createKeyFrameCard('bestBalance', '⚖️ Bästa Balans', 'Detta är momentet när din balans var som bäst')}
+            ${createKeyFrameCard('fullArmExtension', '💪 Maximal Armsträckning', 'Här är armen fullt utsträckt för maximal kraft')}
+            ${createKeyFrameCard('bestPosture', '🎯 Bästa Hållning', 'Din kroppshållning är optimal i detta ögonblick')}
+        </div>
+    `;
+}
+
+// Create individual key frame card
+function createKeyFrameCard(frameKey, title, description) {
+    const frame = keyFrames[frameKey];
+
+    if (!frame) {
+        return `
+            <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
+                <h4 style="color: var(--text-secondary); margin-bottom: 1rem;">${title}</h4>
+                <div style="aspect-ratio: 16/9; background: var(--bg-primary); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">
+                    Inget nyckelmoment hittat
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border-color); transition: all 0.3s; cursor: pointer;"
+             onmouseover="this.style.borderColor='var(--primary-color)'; this.style.transform='translateY(-5px)'"
+             onmouseout="this.style.borderColor='var(--border-color)'; this.style.transform='translateY(0)'">
+            <h4 style="color: var(--primary-color); margin-bottom: 0.5rem;">${title}</h4>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">${description}</p>
+            <img src="${frame.image}" style="width: 100%; border-radius: 8px; border: 2px solid var(--border-color);" alt="${title}">
+            <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-primary); border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--text-secondary); font-size: 0.85rem;">⏱️ Tidsstämpel</span>
+                    <span style="color: var(--text-primary); font-weight: 600;">${frame.timestamp.toFixed(2)}s</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Add replay button
+function addReplayButton() {
+    // Check if replay section already exists
+    let replaySection = document.getElementById('replaySection');
+
+    if (!replaySection) {
+        replaySection = document.createElement('div');
+        replaySection.id = 'replaySection';
+        replaySection.style.cssText = `
+            margin-top: 3rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 12px;
+            text-align: center;
+        `;
+        analysisResults.appendChild(replaySection);
+    }
+
+    replaySection.innerHTML = `
+        <h3 style="color: white; margin-bottom: 1rem; font-size: 1.5rem;">
+            🔁 Se hela analysen igen
+        </h3>
+        <p style="color: rgba(255, 255, 255, 0.9); margin-bottom: 1.5rem;">
+            Spela upp din video igen med alla AI-punkter synliga för att få en fullständig översikt av din teknik
+        </p>
+        <button id="replayVideoBtn" style="
+            background: white;
+            color: var(--primary-color);
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+            ▶️ Spela Replay med AI-Punkter
+        </button>
+    `;
+
+    // Add click event to replay button
+    document.getElementById('replayVideoBtn').addEventListener('click', replayVideoWithPose);
+}
+
+// Replay video with pose overlay
+async function replayVideoWithPose() {
+    // Reset video to start
+    videoElement.currentTime = 0;
+    videoElement.play();
+
+    // Show overlay message
+    const replayMsg = document.createElement('div');
+    replayMsg.style.cssText = `
+        position: fixed;
+        top: 100px;
+        right: 20px;
+        background: var(--success);
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease;
+    `;
+    replayMsg.textContent = '▶️ Replay startar med AI-punkter...';
+    document.body.appendChild(replayMsg);
+
+    setTimeout(() => replayMsg.remove(), 3000);
+
+    // Process frames for replay
+    let replayFrameIndex = 0;
+
+    const replayInterval = setInterval(async () => {
+        if (videoElement.paused || videoElement.ended || replayFrameIndex >= poseData.length) {
+            clearInterval(replayInterval);
+            return;
+        }
+
+        // Get pose data for current time
+        const currentPose = poseData[replayFrameIndex];
+        if (currentPose && Math.abs(currentPose.timestamp - videoElement.currentTime) < 0.1) {
+            // Recreate the pose object
+            const pose = {
+                keypoints: currentPose.keypoints,
+                score: currentPose.score
+            };
+            drawPose(pose);
+            replayFrameIndex++;
+        }
+    }, 50);
+}
+
 // Reset analysis
 function resetAnalysis() {
     analyzeBtn.disabled = false;
@@ -639,6 +909,14 @@ resetBtn.addEventListener('click', () => {
     videoElement.pause();
     videoElement.src = '';
     poseData = [];
+    capturedFrames = [];
+    keyFrames = {
+        bestBalance: null,
+        fullArmExtension: null,
+        maxHipRotation: null,
+        bestPosture: null,
+        followThrough: null
+    };
 
     // Hide video and results
     videoContainer.style.display = 'none';
