@@ -471,36 +471,159 @@ function analyzeFollowThrough(data) {
     }
 }
 
-// Display results
+// Display results with scoring
 function displayResults(metrics) {
     if (!metrics) {
         return;
     }
 
+    // Calculate overall score
+    const overallScore = Math.round(
+        (metrics.posture.score +
+         metrics.balance.score +
+         metrics.hipRotation.score +
+         metrics.arm.score +
+         metrics.followThrough.score) / 5
+    );
+
+    // Display overall score
+    displayOverallScore(overallScore);
+
     // Update posture
-    const postureMetric = document.getElementById('postureResult').parentElement;
-    postureMetric.className = `metric metric-${metrics.posture.rating}`;
-    document.getElementById('postureResult').textContent = metrics.posture.text;
+    updateMetricDisplay('postureResult', metrics.posture, 'Kroppshållning');
 
     // Update balance
-    const balanceMetric = document.getElementById('balanceResult').parentElement;
-    balanceMetric.className = `metric metric-${metrics.balance.rating}`;
-    document.getElementById('balanceResult').textContent = metrics.balance.text;
+    updateMetricDisplay('balanceResult', metrics.balance, 'Balans');
 
     // Update hip rotation
-    const hipMetric = document.getElementById('hipRotationResult').parentElement;
-    hipMetric.className = `metric metric-${metrics.hipRotation.rating}`;
-    document.getElementById('hipRotationResult').textContent = metrics.hipRotation.text;
+    updateMetricDisplay('hipRotationResult', metrics.hipRotation, 'Höftrotation');
 
     // Update arm movement
-    const armMetric = document.getElementById('armMovementResult').parentElement;
-    armMetric.className = `metric metric-${metrics.arm.rating}`;
-    document.getElementById('armMovementResult').textContent = metrics.arm.text;
+    updateMetricDisplay('armMovementResult', metrics.arm, 'Armsträckning');
 
     // Update follow through
-    const followMetric = document.getElementById('followThroughResult').parentElement;
-    followMetric.className = `metric metric-${metrics.followThrough.rating}`;
-    document.getElementById('followThroughResult').textContent = metrics.followThrough.text;
+    updateMetricDisplay('followThroughResult', metrics.followThrough, 'Uppföljning');
+}
+
+// Update individual metric display with score
+function updateMetricDisplay(elementId, metricData, title) {
+    const metricElement = document.getElementById(elementId);
+    if (!metricElement) return;
+
+    const metricParent = metricElement.parentElement;
+    metricParent.className = `metric metric-${metricData.rating}`;
+
+    // Create score badge
+    const scorePercentage = Math.round(metricData.score);
+    const scoreColor = metricData.rating === 'good' ? '#3fb950' :
+                       metricData.rating === 'warning' ? '#d29922' : '#f85149';
+
+    metricElement.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <strong style="color: var(--text-primary);">${title}</strong>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="background: ${scoreColor}; color: white; padding: 0.25rem 0.75rem; border-radius: 12px; font-weight: 700; font-size: 0.9rem;">
+                    ${scorePercentage}/100
+                </div>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary); margin: 0;">${metricData.text}</p>
+        ${getDetailedExplanation(title, metricData)}
+    `;
+}
+
+// Get detailed explanation for each metric
+function getDetailedExplanation(title, metricData) {
+    const explanations = {
+        'Kroppshållning': {
+            good: '✓ Din kroppshållning är utmärkt! Ryggen är rak och axlarna är balanserade genom hela kastet.',
+            warning: '⚠️ Håll ryggen rakare. Försök att inte luta dig för mycket framåt eller bakåt under kastet.',
+            error: '✗ Fokusera på att hålla en upprätt position. Använd din core-styrka för att stabilisera överkroppen.'
+        },
+        'Balans': {
+            good: '✓ Utmärkt balans! Dina fötter är väl placerade och du har stabil grund genom kastet.',
+            warning: '⚠️ Arbeta med fotplaceringen. Testa att ha bredare ställning för bättre stabilitet.',
+            error: '✗ Din balans behöver förbättras. Öva stående på ett ben och arbeta med core-styrkan.'
+        },
+        'Höftrotation': {
+            good: '✓ Perfekt höftrotation! Du genererar bra kraft genom att använda hela kroppen.',
+            warning: '⚠️ Öka höftrotationen för mer kraft. Tänk på att "leda med höften" innan armen kommer med.',
+            error: '✗ För lite höftrotation. Tänk på golf-swing - höfterna ska rotera före armen.'
+        },
+        'Armsträckning': {
+            good: '✓ Bra armsträckning! Du får ut maximal räckvidd och kraft.',
+            warning: '⚠️ Sträck ut armen mer. En längre räckvidd ger mer kraft och kontroll.',
+            error: '✗ Armen är för böjd. Öva på att kasta med utsträckt arm för bättre avstånd.'
+        },
+        'Uppföljning': {
+            good: '✓ Excellent follow-through! Du följer igenom kastet helt vilket ger precision.',
+            warning: '⚠️ Följ igenom kastet mer. Låt kroppen fortsätta rörelsen efter release.',
+            error: '✗ Bristande uppföljning. Tänk på att kroppen ska fortsätta rörelsen även efter du släppt discen.'
+        }
+    };
+
+    const explanation = explanations[title]?.[metricData.rating] || '';
+
+    return `
+        <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 3px solid ${
+            metricData.rating === 'good' ? '#3fb950' :
+            metricData.rating === 'warning' ? '#d29922' : '#f85149'
+        };">
+            <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
+                ${explanation}
+            </p>
+        </div>
+    `;
+}
+
+// Display overall score
+function displayOverallScore(score) {
+    // Check if overall score element exists, if not create it
+    let overallScoreElement = document.getElementById('overallScore');
+
+    if (!overallScoreElement) {
+        // Insert at the beginning of analysis results
+        const analysisResults = document.getElementById('analysisResults');
+        const firstChild = analysisResults.firstChild;
+
+        overallScoreElement = document.createElement('div');
+        overallScoreElement.id = 'overallScore';
+        analysisResults.insertBefore(overallScoreElement, firstChild);
+    }
+
+    const scoreColor = score >= 70 ? '#3fb950' : score >= 50 ? '#d29922' : '#f85149';
+    const scoreRating = score >= 70 ? 'Utmärkt!' : score >= 50 ? 'Bra!' : 'Behöver träning';
+    const scoreEmoji = score >= 70 ? '🌟' : score >= 50 ? '👍' : '💪';
+
+    overallScoreElement.innerHTML = `
+        <div style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; text-align: center; box-shadow: var(--shadow-glow);">
+            <h3 style="color: white; margin-bottom: 1rem; font-size: 1.3rem;">Totalt Betyg ${scoreEmoji}</h3>
+            <div style="font-size: 4rem; font-weight: 800; color: white; margin: 1rem 0;">
+                ${score}<span style="font-size: 2rem; opacity: 0.8;">/100</span>
+            </div>
+            <div style="background: rgba(255, 255, 255, 0.2); padding: 0.75rem 2rem; border-radius: 20px; display: inline-block; backdrop-filter: blur(10px);">
+                <span style="color: white; font-weight: 600; font-size: 1.1rem;">${scoreRating}</span>
+            </div>
+            <p style="color: rgba(255, 255, 255, 0.9); margin-top: 1rem; font-size: 0.95rem;">
+                ${getOverallFeedback(score)}
+            </p>
+        </div>
+    `;
+}
+
+// Get overall feedback based on score
+function getOverallFeedback(score) {
+    if (score >= 80) {
+        return 'Fantastisk teknik! Du har en mycket solid grund. Fortsätt träna för att finslipa detaljerna.';
+    } else if (score >= 70) {
+        return 'Bra jobbat! Din teknik är god men det finns utrymme för förbättring på vissa områden.';
+    } else if (score >= 60) {
+        return 'Du är på rätt väg! Fokusera på de områden som fick lägre poäng för snabba framsteg.';
+    } else if (score >= 50) {
+        return 'Grunden finns där! Med träning på de svagare områdena kommer du snabbt bli bättre.';
+    } else {
+        return 'Fortsätt träna! Var inte avskräckt - alla kan förbättra sin teknik med rätt övningar.';
+    }
 }
 
 // Reset analysis
