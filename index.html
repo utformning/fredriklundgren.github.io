@@ -77,8 +77,28 @@
 
                 <div class="tech-info">
                     <h3>Så fungerar tekniken:</h3>
-                    <p>AI:n använder <strong>TensorFlow.js</strong> med <strong>MoveNet</strong>-modellen för avancerad pose detection. Genom att analysera 17 nyckelpoints på din kropp (axlar, höfter, armbågar, knän, handleder m.m.) kan systemet identifiera tekniska brister i realtid.</p>
-                    <p>Varje video analyseras frame-by-frame för att ge dig exakta mätningar på:</p>
+                    <p>AI Form Analyzer bygger på <strong>TensorFlow.js</strong> med <strong>MoveNet Thunder</strong>-modellen - Googles state-of-the-art pose detection-teknologi. Denna AI har tränats på miljontals bilder och kan identifiera 17 nyckelpoints på din kropp med extremt hög precision:</p>
+
+                    <div class="keypoints-grid">
+                        <div class="keypoint-item">👁️ Näsa & ögon</div>
+                        <div class="keypoint-item">👂 Öron</div>
+                        <div class="keypoint-item">💪 Axlar & armbågar</div>
+                        <div class="keypoint-item">✋ Handleder</div>
+                        <div class="keypoint-item">🦴 Höfter</div>
+                        <div class="keypoint-item">🦵 Knän & anklar</div>
+                    </div>
+
+                    <h4>Analysfasen:</h4>
+                    <ol class="tech-steps">
+                        <li><strong>Frame-by-frame analys:</strong> Din video analyseras i realtid, cirka 30 frames per sekund, för att fånga varje rörelse i detalj.</li>
+                        <li><strong>Pose detection:</strong> För varje frame identifierar AI:n alla 17 keypoints och beräknar ett confidence score (0-100%) för varje punkt.</li>
+                        <li><strong>Teknisk mätning:</strong> Systemet mäter vinklar, avstånd och rotationer mellan punkterna för att bedöma din teknik.</li>
+                        <li><strong>Key moments:</strong> AI:n identifierar automatiskt kritiska ögonblick som "reachback", "power pocket" och "follow-through".</li>
+                        <li><strong>Poängsystem:</strong> Baserat på biomechaniska principer beräknas poäng för balans, hållning, armrörelse och uppföljning.</li>
+                        <li><strong>Personlig feedback:</strong> Du får detaljerade förslag på förbättringar, inklusive screenshots från nyckelmoment med AI-overlay.</li>
+                    </ol>
+
+                    <p class="tech-note">💡 <strong>Allt körs lokalt i din webbläsare</strong> - ingen video laddas upp till servrar, så din integritet är 100% skyddad!</p>
                 </div>
 
                 <div class="ai-features">
