@@ -30,7 +30,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     });
 });
 
-// Navbar Background on Scroll
+// Navbar Background on Scroll - Dark Theme
 const navbar = document.querySelector('.navbar');
 let lastScroll = 0;
 
@@ -38,11 +38,11 @@ window.addEventListener('scroll', () => {
     const currentScroll = window.pageYOffset;
 
     if (currentScroll > 100) {
-        navbar.style.background = 'rgba(255, 255, 255, 0.98)';
-        navbar.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+        navbar.style.background = 'rgba(13, 17, 23, 0.98)';
+        navbar.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
     } else {
-        navbar.style.background = '#ffffff';
-        navbar.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+        navbar.style.background = 'rgba(13, 17, 23, 0.95)';
+        navbar.style.boxShadow = '0 1px 0 rgba(48, 54, 61, 1)';
     }
 
     lastScroll = currentScroll;
@@ -261,4 +261,51 @@ document.querySelectorAll('.service-card').forEach(card => {
     });
 });
 
-console.log('Felix Lundgren - Discgolftränare webbplats laddad! 🥏');
+// GitHub-style scroll reveal for AI features
+const featureObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+            setTimeout(() => {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }, index * 100);
+            featureObserver.unobserve(entry.target);
+        }
+    });
+}, { threshold: 0.2 });
+
+document.querySelectorAll('.ai-feature').forEach(feature => {
+    feature.style.opacity = '0';
+    feature.style.transform = 'translateY(30px)';
+    feature.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+    featureObserver.observe(feature);
+});
+
+// Parallax effect for AI promo background
+window.addEventListener('scroll', () => {
+    const aiPromo = document.querySelector('.ai-promo');
+    if (aiPromo) {
+        const scrolled = window.pageYOffset;
+        const aiPromoTop = aiPromo.offsetTop;
+        const aiPromoHeight = aiPromo.offsetHeight;
+
+        if (scrolled > aiPromoTop - window.innerHeight && scrolled < aiPromoTop + aiPromoHeight) {
+            const offset = (scrolled - aiPromoTop + window.innerHeight) * 0.1;
+            aiPromo.style.backgroundPosition = `center ${offset}px`;
+        }
+    }
+});
+
+// Add glow effect on card hover
+document.querySelectorAll('.about-content, .ai-promo-content').forEach(card => {
+    card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        card.style.setProperty('--mouse-x', `${x}px`);
+        card.style.setProperty('--mouse-y', `${y}px`);
+    });
+});
+
+console.log('Felix Lundgren - Discgolftränare webbplats laddad! 🥏🚀');
