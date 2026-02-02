@@ -7,15 +7,26 @@ let isAnalyzing = false;
 let showAIOverlay = true; // Toggle for showing/hiding AI pose overlay
 let poseData = [];
 let keyFrames = {
-    bestBalance: null,
-    fullArmExtension: null,
-    maxHipRotation: null,
-    bestPosture: null,
+    // Throwing sequence moments
+    xStep: null,
     reachback: null,
     powerPocket: null,
-    followThrough: null
+    brace: null,
+    release: null,
+    followThrough: null,
+    // Additional analysis
+    bestBalance: null,
+    maxHipRotation: null,
+    bestOffArm: null
 };
 let capturedFrames = [];
+let formErrors = {
+    rounding: [],
+    earlyRelease: [],
+    noBrace: [],
+    allArm: [],
+    noseUp: []
+};
 
 // DOM Elements
 const uploadArea = document.getElementById('uploadArea');
@@ -152,6 +163,14 @@ analyzeBtn.addEventListener('click', async () => {
 
     isAnalyzing = true;
     poseData = [];
+    // Reset form errors
+    formErrors = {
+        rounding: [],
+        earlyRelease: [],
+        noBrace: [],
+        allArm: [],
+        noseUp: []
+    };
     analyzeBtn.disabled = true;
     analyzeBtn.innerHTML = '<span>⏳ Analyserar...</span>';
 
@@ -173,6 +192,7 @@ async function processVideo() {
     return new Promise((resolve) => {
         let frameCount = 0;
         const maxFrames = 300; // Limit frames for performance
+        let previousPose = null; // Track previous pose for comparison
 
         const processFrame = async () => {
             if (videoElement.paused || videoElement.ended || frameCount >= maxFrames) {
@@ -200,8 +220,11 @@ async function processVideo() {
                     // Draw pose on canvas
                     drawPose(pose);
 
-                    // Capture frame with pose overlay for analysis
-                    captureKeyFrame(pose, videoElement.currentTime);
+                    // Capture frame with pose overlay for analysis (pass previous pose for comparison)
+                    captureKeyFrame(pose, videoElement.currentTime, previousPose);
+
+                    // Save current pose for next frame
+                    previousPose = pose;
                 }
 
                 frameCount++;
@@ -270,15 +293,45 @@ function drawPose(pose) {
 }
 
 // Capture key frames during analysis
-function captureKeyFrame(pose, timestamp) {
+function captureKeyFrame(pose, timestamp, previousPose) {
     // Calculate scores for this frame
     const balanceScore = calculateBalanceScore(pose.keypoints);
     const armExtensionScore = calculateArmExtensionScore(pose.keypoints);
-    const hipRotationScore = pose.keypoints.length > 0 ? 50 : 0; // Simplified for now
     const postureScore = calculatePostureScore(pose.keypoints);
     const reachbackScore = calculateReachbackScore(pose.keypoints);
     const powerPocketScore = calculatePowerPocketScore(pose.keypoints);
     const releaseScore = calculateReleaseScore(pose.keypoints);
+
+    // NEW: Advanced analysis
+    const previousKeypoints = previousPose ? previousPose.keypoints : null;
+    const xStepData = analyzeXStep(pose.keypoints, previousKeypoints);
+    const braceData = detectBrace(pose.keypoints);
+    const hipRotationData = calculateHipRotation(pose.keypoints);
+    const offArmData = analyzeOffArm(pose.keypoints);
+
+    // ERROR DETECTION
+    const roundingData = detectRounding(pose.keypoints);
+    const noseAngleData = detectNoseAngle(pose.keypoints);
+    const allArmData = detectAllArmThrow(pose.keypoints, hipRotationData);
+    const earlyReleaseData = detectEarlyRelease(pose.keypoints, timestamp, videoElement.duration);
+    const noBraceData = !braceData.detected && timestamp > videoElement.duration * 0.3;
+
+    // Track errors
+    if (roundingData.detected) {
+        formErrors.rounding.push({ timestamp, severity: roundingData.severity });
+    }
+    if (earlyReleaseData.detected) {
+        formErrors.earlyRelease.push({ timestamp, timing: earlyReleaseData.timing });
+    }
+    if (noBraceData) {
+        formErrors.noBrace.push({ timestamp });
+    }
+    if (allArmData.detected) {
+        formErrors.allArm.push({ timestamp, severity: allArmData.severity });
+    }
+    if (noseAngleData.noseUp) {
+        formErrors.noseUp.push({ timestamp, severity: noseAngleData.severity });
+    }
 
     // Capture canvas image with pose overlay (AI version)
     const frameImageWithAI = canvas.toDataURL('image/png');
@@ -372,7 +425,7 @@ function captureKeyFrame(pose, timestamp) {
 
     // 4. Capture follow-through (must be after release, arm still extended forward)
     if (armExtensionScore > 50) {
-        const canCaptureFollowThrough = !keyFrames.fullArmExtension || timestamp > keyFrames.fullArmExtension.timestamp + 0.1;
+        const canCaptureFollowThrough = !keyFrames.release || timestamp > keyFrames.release.timestamp + 0.1;
         if (canCaptureFollowThrough) {
             if (!keyFrames.followThrough || armExtensionScore > (keyFrames.followThrough.score || 0)) {
                 keyFrames.followThrough = {
@@ -380,6 +433,76 @@ function captureKeyFrame(pose, timestamp) {
                     imageWithAI: frameImageWithAI,
                     timestamp: timestamp,
                     score: armExtensionScore,
+                    pose: pose
+                };
+            }
+        }
+    }
+
+    // NEW CRITICAL MOMENTS
+    // Capture X-Step if detected
+    if (xStepData.timing && xStepData.score > 60) {
+        if (!keyFrames.xStep || xStepData.score > (keyFrames.xStep.score || 0)) {
+            keyFrames.xStep = {
+                imageClean: frameImageClean,
+                imageWithAI: frameImageWithAI,
+                timestamp: timestamp,
+                score: xStepData.score,
+                pose: pose
+            };
+        }
+    }
+
+    // Capture Brace moment
+    if (braceData.detected && braceData.quality > 70) {
+        if (!keyFrames.brace || braceData.quality > (keyFrames.brace.score || 0)) {
+            keyFrames.brace = {
+                imageClean: frameImageClean,
+                imageWithAI: frameImageWithAI,
+                timestamp: timestamp,
+                score: braceData.quality,
+                pose: pose
+            };
+        }
+    }
+
+    // Capture best hip rotation
+    if (hipRotationData.rotated && hipRotationData.score > 60) {
+        if (!keyFrames.maxHipRotation || hipRotationData.score > (keyFrames.maxHipRotation.score || 0)) {
+            keyFrames.maxHipRotation = {
+                imageClean: frameImageClean,
+                imageWithAI: frameImageWithAI,
+                timestamp: timestamp,
+                score: hipRotationData.score,
+                pose: pose,
+                separation: hipRotationData.separation
+            };
+        }
+    }
+
+    // Capture best off-arm position
+    if (offArmData.extended && offArmData.score > 60) {
+        if (!keyFrames.bestOffArm || offArmData.score > (keyFrames.bestOffArm.score || 0)) {
+            keyFrames.bestOffArm = {
+                imageClean: frameImageClean,
+                imageWithAI: frameImageWithAI,
+                timestamp: timestamp,
+                score: offArmData.score,
+                pose: pose
+            };
+        }
+    }
+
+    // Update release key frame specifically
+    if (releaseScore > 50) {
+        const canCaptureRelease = !keyFrames.powerPocket || timestamp > keyFrames.powerPocket.timestamp;
+        if (canCaptureRelease) {
+            if (!keyFrames.release || releaseScore > (keyFrames.release.score || 0)) {
+                keyFrames.release = {
+                    imageClean: frameImageClean,
+                    imageWithAI: frameImageWithAI,
+                    timestamp: timestamp,
+                    score: releaseScore,
                     pose: pose
                 };
             }
@@ -575,6 +698,282 @@ function calculateReleaseScore(keypoints) {
     return 0;
 }
 
+// X-STEP AND FOOTWORK ANALYSIS
+// Based on: https://discgolf.ultiworld.com/2022/07/26/tuesday-tips-dont-fake-your-x-step/
+function analyzeXStep(keypoints, previousKeypoints) {
+    if (!previousKeypoints) return { score: 0, timing: false };
+
+    const leftAnkle = getKeypoint(keypoints, 'left_ankle');
+    const rightAnkle = getKeypoint(keypoints, 'right_ankle');
+    const leftHip = getKeypoint(keypoints, 'left_hip');
+    const rightHip = getKeypoint(keypoints, 'right_hip');
+
+    const prevLeftAnkle = getKeypoint(previousKeypoints, 'left_ankle');
+    const prevRightAnkle = getKeypoint(previousKeypoints, 'right_ankle');
+
+    if (leftAnkle.score > 0.3 && rightAnkle.score > 0.3 &&
+        prevLeftAnkle.score > 0.3 && prevRightAnkle.score > 0.3 &&
+        leftHip.score > 0.3 && rightHip.score > 0.3) {
+
+        // Detect foot movement
+        const leftFootMoved = Math.abs(leftAnkle.x - prevLeftAnkle.x) > 20;
+        const rightFootMoved = Math.abs(rightAnkle.x - prevRightAnkle.x) > 20;
+
+        // Check if hips are closed (not opened toward target)
+        const hipsClosed = Math.abs(leftHip.x - rightHip.x) < 100;
+
+        // Check foot spacing (should be shoulder-width or wider)
+        const footSpacing = Math.abs(leftAnkle.x - rightAnkle.x);
+        const goodSpacing = footSpacing > 80 && footSpacing < 200;
+
+        let score = 0;
+        if (leftFootMoved || rightFootMoved) score += 40;
+        if (hipsClosed) score += 30;
+        if (goodSpacing) score += 30;
+
+        return {
+            score: score,
+            timing: (leftFootMoved || rightFootMoved) && hipsClosed
+        };
+    }
+
+    return { score: 0, timing: false };
+}
+
+// BRACE DETECTION - Front foot plant
+// Based on: https://blog.dynamicdiscs.com/2017/07/why-is-footwork-so-important.html
+function detectBrace(keypoints) {
+    const leftAnkle = getKeypoint(keypoints, 'left_ankle');
+    const leftKnee = getKeypoint(keypoints, 'left_knee');
+    const leftHip = getKeypoint(keypoints, 'left_hip');
+    const rightHip = getKeypoint(keypoints, 'right_hip');
+
+    if (leftAnkle.score > 0.3 && leftKnee.score > 0.3 &&
+        leftHip.score > 0.3 && rightHip.score > 0.3) {
+
+        // Front leg should be relatively straight (braced)
+        const legLength = Math.sqrt(
+            Math.pow(leftKnee.x - leftAnkle.x, 2) +
+            Math.pow(leftKnee.y - leftAnkle.y, 2)
+        );
+        const hipToKnee = Math.sqrt(
+            Math.pow(leftHip.x - leftKnee.x, 2) +
+            Math.pow(leftHip.y - leftKnee.y, 2)
+        );
+        const hipToAnkle = Math.sqrt(
+            Math.pow(leftHip.x - leftAnkle.x, 2) +
+            Math.pow(leftHip.y - leftAnkle.y, 2)
+        );
+
+        // Leg straightness ratio
+        const legStraight = hipToAnkle / (legLength + hipToKnee);
+        const isBraced = legStraight > 0.85; // 85% = relatively straight
+
+        // Weight on front foot (ankle should be under or forward of knee)
+        const weightForward = leftAnkle.x >= leftKnee.x - 20;
+
+        if (isBraced && weightForward) {
+            return { detected: true, quality: legStraight * 100 };
+        }
+    }
+
+    return { detected: false, quality: 0 };
+}
+
+// HIP ROTATION MEASUREMENT - Enhanced version
+// Based on: https://blog.dynamicdiscs.com/2017/07/why-is-footwork-so-important.html
+function calculateHipRotation(keypoints) {
+    const leftHip = getKeypoint(keypoints, 'left_hip');
+    const rightHip = getKeypoint(keypoints, 'right_hip');
+    const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
+    const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+
+    if (leftHip.score > 0.3 && rightHip.score > 0.3 &&
+        leftShoulder.score > 0.3 && rightShoulder.score > 0.3) {
+
+        // Calculate hip line angle
+        const hipAngle = Math.atan2(rightHip.y - leftHip.y, rightHip.x - leftHip.x);
+
+        // Calculate shoulder line angle
+        const shoulderAngle = Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x);
+
+        // Rotation difference (separation between hips and shoulders)
+        const separation = Math.abs(shoulderAngle - hipAngle) * (180 / Math.PI);
+
+        // Hip width (indicates rotation)
+        const hipWidth = Math.abs(rightHip.x - leftHip.x);
+
+        // Good rotation: hips lead shoulders, good separation
+        const score = Math.min((separation / 30) * 50 + (hipWidth / 200) * 50, 100);
+
+        return {
+            score: score,
+            separation: separation,
+            rotated: hipWidth > 100
+        };
+    }
+
+    return { score: 0, separation: 0, rotated: false };
+}
+
+// OFF-ARM (LEFT ARM) POSITION ANALYSIS
+function analyzeOffArm(keypoints) {
+    const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
+    const leftElbow = getKeypoint(keypoints, 'left_elbow');
+    const leftWrist = getKeypoint(keypoints, 'left_wrist');
+    const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+
+    if (leftShoulder.score > 0.3 && leftElbow.score > 0.3 &&
+        leftWrist.score > 0.3 && rightShoulder.score > 0.3) {
+
+        // Off-arm should be extended and balanced (not tucked in)
+        const armLength = Math.sqrt(
+            Math.pow(leftWrist.x - leftShoulder.x, 2) +
+            Math.pow(leftWrist.y - leftShoulder.y, 2)
+        );
+
+        // Check if arm is extended outward (good for balance)
+        const isExtended = armLength > 150;
+
+        // Off-arm should help with balance - not too high, not too low
+        const heightDiff = Math.abs(leftWrist.y - leftShoulder.y);
+        const goodHeight = heightDiff < 100;
+
+        let score = 0;
+        if (isExtended) score += 60;
+        if (goodHeight) score += 40;
+
+        return { score: score, extended: isExtended };
+    }
+
+    return { score: 0, extended: false };
+}
+
+// ROUNDING DETECTION - Curved vs straight pull
+// Based on: https://discgolf.ultiworld.com/2022/01/11/tuesday-tips-stop-rounding-or-how-to-fix-disc-golfs-most-common-flaw/
+function detectRounding(keypoints) {
+    const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+    const rightElbow = getKeypoint(keypoints, 'right_elbow');
+    const rightWrist = getKeypoint(keypoints, 'right_wrist');
+    const chest = getKeypoint(keypoints, 'right_shoulder'); // Approximate chest position
+
+    if (rightShoulder.score > 0.3 && rightElbow.score > 0.3 && rightWrist.score > 0.3) {
+        // Check if disc/wrist path goes around body (rounding) vs straight line
+        // In rounding, elbow stays close to body and wrist curves around
+
+        const elbowToChest = Math.abs(rightElbow.x - chest.x);
+        const wristToChest = Math.abs(rightWrist.x - chest.x);
+
+        // Rounding: elbow is very close to chest during pull
+        const elbowTooClose = elbowToChest < 50;
+
+        // Check if wrist makes a curve (y-displacement while x barely changes)
+        const wristBehindBody = rightWrist.x < rightShoulder.x;
+        const elbowBehindShoulder = rightElbow.x < rightShoulder.x + 30;
+
+        const isRounding = elbowTooClose && wristBehindBody && elbowBehindShoulder;
+
+        return {
+            detected: isRounding,
+            severity: isRounding ? (100 - elbowToChest) : 0
+        };
+    }
+
+    return { detected: false, severity: 0 };
+}
+
+// NOSE ANGLE DETECTION (disc pointing up or down at release)
+// Based on: https://www.dgcoursereview.com/threads/how-to-fix-nose-angle.181082/
+function detectNoseAngle(keypoints) {
+    const rightWrist = getKeypoint(keypoints, 'right_wrist');
+    const rightElbow = getKeypoint(keypoints, 'right_elbow');
+    const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+
+    if (rightWrist.score > 0.3 && rightElbow.score > 0.3 && rightShoulder.score > 0.3) {
+        // Wrist position relative to elbow indicates nose angle
+        // If wrist is above elbow at release = nose up (bad)
+        // If wrist is level or below elbow = nose down or neutral (good)
+
+        const wristHeight = rightWrist.y;
+        const elbowHeight = rightElbow.y;
+        const shoulderHeight = rightShoulder.y;
+
+        // Calculate angle - wrist should be at or below elbow level
+        const heightDiff = wristHeight - elbowHeight;
+
+        // Nose up if wrist is significantly above elbow
+        const noseUp = heightDiff < -30; // Negative Y is up in canvas coords
+
+        // Calculate severity (0-100, higher = worse)
+        const severity = noseUp ? Math.min(Math.abs(heightDiff) / 2, 100) : 0;
+
+        return {
+            noseUp: noseUp,
+            severity: severity,
+            angle: heightDiff
+        };
+    }
+
+    return { noseUp: false, severity: 0, angle: 0 };
+}
+
+// ALL-ARM THROW DETECTION (not using hips/legs)
+// Based on: https://www.innovadiscs.com/tips/common-throwing-errors-holding-back-your-game/
+function detectAllArmThrow(keypoints, hipRotationData) {
+    const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+    const rightWrist = getKeypoint(keypoints, 'right_wrist');
+    const leftHip = getKeypoint(keypoints, 'left_hip');
+    const rightHip = getKeypoint(keypoints, 'right_hip');
+
+    if (rightShoulder.score > 0.3 && rightWrist.score > 0.3 &&
+        leftHip.score > 0.3 && rightHip.score > 0.3) {
+
+        // Check if hips barely moved/rotated
+        const poorHipRotation = hipRotationData.score < 40;
+
+        // Check if arm is moving but hips aren't
+        const armInMotion = Math.abs(rightWrist.x - rightShoulder.x) > 100;
+        const hipsStatic = Math.abs(leftHip.x - rightHip.x) < 80;
+
+        const isAllArm = poorHipRotation && armInMotion && hipsStatic;
+
+        return {
+            detected: isAllArm,
+            severity: isAllArm ? (100 - hipRotationData.score) : 0
+        };
+    }
+
+    return { detected: false, severity: 0 };
+}
+
+// EARLY RELEASE DETECTION
+function detectEarlyRelease(keypoints, timestamp, videoDuration) {
+    const rightWrist = getKeypoint(keypoints, 'right_wrist');
+    const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+    const rightElbow = getKeypoint(keypoints, 'right_elbow');
+
+    if (rightWrist.score > 0.3 && rightShoulder.score > 0.3 && rightElbow.score > 0.3) {
+        // Early release: arm is extended but we're still early in the throw motion
+        const armExtended = rightWrist.x > rightShoulder.x + 50;
+
+        // Check if we're in the early/middle part of video (not at end where release should be)
+        const videoProgress = timestamp / videoDuration;
+        const tooEarly = videoProgress < 0.4; // Release shouldn't happen in first 40%
+
+        // Elbow should still be bent in power pocket, not extended yet
+        const elbowExtendedTooEarly = rightElbow.x > rightShoulder.x + 40 && videoProgress < 0.5;
+
+        const isEarlyRelease = (armExtended && tooEarly) || elbowExtendedTooEarly;
+
+        return {
+            detected: isEarlyRelease,
+            timing: videoProgress
+        };
+    }
+
+    return { detected: false, timing: 0 };
+}
+
 // Analyze results
 function analyzeResults() {
     if (poseData.length === 0) {
@@ -591,6 +990,9 @@ function analyzeResults() {
 
     // Display key frames gallery
     displayKeyFramesGallery();
+
+    // Display form errors
+    displayFormErrors();
 
     // Add replay functionality
     addReplayButton();
@@ -609,6 +1011,7 @@ function analyzeResults() {
     isAnalyzing = false;
 
     console.log('Analysis complete:', metrics);
+    console.log('Form errors detected:', formErrors);
 }
 
 // Calculate metrics from pose data
@@ -994,11 +1397,161 @@ function displayKeyFramesGallery() {
         <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
             De viktigaste ögonblicken från ditt kast - klicka "👁️ AI" för att växla mellan video och AI-overlay:
         </p>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem;">
+
+        <h4 style="color: var(--text-primary); margin: 1.5rem 0 1rem 0; font-size: 1.1rem;">🦶 Fotarbete & Setup</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; margin-bottom: 2rem;">
+            ${createKeyFrameCard('xStep', '🚶 X-Step', 'Fotarbete och timing')}
+            ${createKeyFrameCard('brace', '🛡️ Brace', 'Främre fot planterad, redo för kraftöverföring')}
+        </div>
+
+        <h4 style="color: var(--text-primary); margin: 1.5rem 0 1rem 0; font-size: 1.1rem;">💪 Kastteknik</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; margin-bottom: 2rem;">
             ${createKeyFrameCard('reachback', '↩️ Reachback', 'Armen maximalt bakåt')}
             ${createKeyFrameCard('powerPocket', '⚡ Power Pocket', 'Armbågen böjd ~90°, kraft laddas')}
-            ${createKeyFrameCard('fullArmExtension', '💪 Release', 'Discen släpps, arm utsträckt')}
+            ${createKeyFrameCard('release', '💪 Release', 'Discen släpps, arm utsträckt')}
             ${createKeyFrameCard('followThrough', '🎬 Follow Through', 'Uppföljning efter release')}
+        </div>
+
+        <h4 style="color: var(--text-primary); margin: 1.5rem 0 1rem 0; font-size: 1.1rem;">🎯 Kroppsposition</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem;">
+            ${createKeyFrameCard('maxHipRotation', '🔄 Höftrotation', 'Maximal separation mellan höfter och axlar')}
+            ${createKeyFrameCard('bestOffArm', '🤚 Off-Arm', 'Vänster arm för balans')}
+        </div>
+    `;
+}
+
+// Display form errors section
+function displayFormErrors() {
+    // Check if errors section already exists
+    let errorsSection = document.getElementById('formErrorsSection');
+
+    if (!errorsSection) {
+        // Create errors section
+        errorsSection = document.createElement('div');
+        errorsSection.id = 'formErrorsSection';
+        errorsSection.style.cssText = `
+            margin-top: 2rem;
+            padding: 2rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        `;
+        analysisResults.appendChild(errorsSection);
+    }
+
+    // Check if we have any errors
+    const hasErrors = formErrors.rounding.length > 0 ||
+                      formErrors.earlyRelease.length > 0 ||
+                      formErrors.noBrace.length > 0 ||
+                      formErrors.allArm.length > 0 ||
+                      formErrors.noseUp.length > 0;
+
+    if (!hasErrors) {
+        errorsSection.innerHTML = `
+            <h3 style="color: #3fb950; margin-bottom: 0.5rem; font-size: 1.5rem;">
+                ✅ Inga stora formfel hittades!
+            </h3>
+            <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                Din teknik ser bra ut! Fortsätt träna för att perfektionera detaljerna.
+            </p>
+        `;
+        return;
+    }
+
+    // Build error cards HTML
+    let errorCardsHTML = '';
+
+    // Rounding error
+    if (formErrors.rounding.length > 0) {
+        const avgSeverity = formErrors.rounding.reduce((sum, e) => sum + e.severity, 0) / formErrors.rounding.length;
+        errorCardsHTML += createErrorCard(
+            '🔴 Rounding',
+            'Du kastar med en rundad bana (disc går runt kroppen istället för rakt)',
+            `Upptäckt ${formErrors.rounding.length} gånger`,
+            avgSeverity,
+            '💡 <strong>Lösning:</strong> Dra armbågen rakt tillbaka längs en rak linje. Tänk "dra starthylsan på en gräsklippare" - rak rörelse, inte rund.'
+        );
+    }
+
+    // Nose angle error
+    if (formErrors.noseUp.length > 0) {
+        const avgSeverity = formErrors.noseUp.reduce((sum, e) => sum + e.severity, 0) / formErrors.noseUp.length;
+        errorCardsHTML += createErrorCard(
+            '📐 Nose Up',
+            'Discens nos pekar uppåt vid release (orsakar höga kaströrelser och dålig glidflykt)',
+            `Upptäckt ${formErrors.noseUp.length} gånger`,
+            avgSeverity,
+            '💡 <strong>Lösning:</strong> Håll handleden jämn eller lätt nedåt vid release. Tryck ner med pekfingret för att få nosen nedåt.'
+        );
+    }
+
+    // All-arm throw
+    if (formErrors.allArm.length > 0) {
+        const avgSeverity = formErrors.allArm.reduce((sum, e) => sum + e.severity, 0) / formErrors.allArm.length;
+        errorCardsHTML += createErrorCard(
+            '💪 All-Arm Throw',
+            'Du kastar mest med armen - höfterna rör sig inte tillräckligt',
+            `Upptäckt ${formErrors.allArm.length} gånger`,
+            avgSeverity,
+            '💡 <strong>Lösning:</strong> Kraften kommer från höfterna och benen! Tänk på att rotera höfterna INNAN armen svingar fram. Som en golfswing.'
+        );
+    }
+
+    // No brace
+    if (formErrors.noBrace.length > 0) {
+        errorCardsHTML += createErrorCard(
+            '🛑 No Brace',
+            'Främre benet bråkar inte ordentligt - energi går förlorad',
+            `Upptäckt ${formErrors.noBrace.length} gånger`,
+            70,
+            '💡 <strong>Lösning:</strong> Plantera främre foten stadigt och håll benet relativt rakt. Detta stoppar din framåtrörelse och omvandlar den till rotationsenergi.'
+        );
+    }
+
+    // Early release
+    if (formErrors.earlyRelease.length > 0) {
+        errorCardsHTML += createErrorCard(
+            '⏱️ Early Release',
+            'Discen släpps för tidigt i kaströrelsen',
+            `Upptäckt ${formErrors.earlyRelease.length} gånger`,
+            60,
+            '💡 <strong>Lösning:</strong> Håll discen längre i power pocket-fasen. Släpp inte förrän armen är nästan helt utsträckt framåt.'
+        );
+    }
+
+    errorsSection.innerHTML = `
+        <h3 style="color: #f85149; margin-bottom: 0.5rem; font-size: 1.5rem;">
+            ⚠️ Upptäckta formfel
+        </h3>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
+            Dessa vanliga fel upptäcktes i din teknik. Åtgärda dessa för snabbare förbättring:
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+            ${errorCardsHTML}
+        </div>
+    `;
+}
+
+// Create individual error card
+function createErrorCard(title, description, frequency, severity, solution) {
+    const severityColor = severity > 70 ? '#f85149' : severity > 40 ? '#d29922' : '#3fb950';
+    const severityLabel = severity > 70 ? 'Allvarligt' : severity > 40 ? 'Måttligt' : 'Lätt';
+
+    return `
+        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 10px; border-left: 4px solid ${severityColor};">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                <h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">${title}</h4>
+                <div style="background: ${severityColor}; color: white; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                    ${severityLabel}
+                </div>
+            </div>
+            <p style="color: var(--text-secondary); margin: 0 0 0.5rem 0; font-size: 0.95rem;">${description}</p>
+            <p style="color: var(--text-muted); margin: 0 0 1rem 0; font-size: 0.85rem; font-style: italic;">${frequency}</p>
+            <div style="background: var(--bg-primary); padding: 1rem; border-radius: 6px; border-left: 3px solid var(--primary-color);">
+                <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem; line-height: 1.6;">
+                    ${solution}
+                </p>
+            </div>
         </div>
     `;
 }
@@ -1188,11 +1741,22 @@ resetBtn.addEventListener('click', () => {
     poseData = [];
     capturedFrames = [];
     keyFrames = {
+        xStep: null,
+        reachback: null,
+        powerPocket: null,
+        brace: null,
+        release: null,
+        followThrough: null,
         bestBalance: null,
-        fullArmExtension: null,
         maxHipRotation: null,
-        bestPosture: null,
-        followThrough: null
+        bestOffArm: null
+    };
+    formErrors = {
+        rounding: [],
+        earlyRelease: [],
+        noBrace: [],
+        allArm: [],
+        noseUp: []
     };
 
     // Hide video and results
