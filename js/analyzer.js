@@ -278,14 +278,24 @@ function captureKeyFrame(pose, timestamp) {
     const postureScore = calculatePostureScore(pose.keypoints);
     const reachbackScore = calculateReachbackScore(pose.keypoints);
     const powerPocketScore = calculatePowerPocketScore(pose.keypoints);
+    const releaseScore = calculateReleaseScore(pose.keypoints);
 
-    // Capture canvas image with pose overlay
-    const frameImage = canvas.toDataURL('image/png');
+    // Capture canvas image with pose overlay (AI version)
+    const frameImageWithAI = canvas.toDataURL('image/png');
+
+    // Also capture clean video screenshot without AI overlay
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(videoElement, 0, 0, tempCanvas.width, tempCanvas.height);
+    const frameImageClean = tempCanvas.toDataURL('image/png');
 
     // Store if it's a key moment
     if (!keyFrames.bestBalance || balanceScore > (keyFrames.bestBalance.score || 0)) {
         keyFrames.bestBalance = {
-            image: frameImage,
+            imageClean: frameImageClean,
+            imageWithAI: frameImageWithAI,
             timestamp: timestamp,
             score: balanceScore,
             pose: pose
@@ -294,7 +304,8 @@ function captureKeyFrame(pose, timestamp) {
 
     if (!keyFrames.fullArmExtension || armExtensionScore > (keyFrames.fullArmExtension.score || 0)) {
         keyFrames.fullArmExtension = {
-            image: frameImage,
+            imageClean: frameImageClean,
+            imageWithAI: frameImageWithAI,
             timestamp: timestamp,
             score: armExtensionScore,
             pose: pose
@@ -303,50 +314,83 @@ function captureKeyFrame(pose, timestamp) {
 
     if (!keyFrames.bestPosture || postureScore > (keyFrames.bestPosture.score || 0)) {
         keyFrames.bestPosture = {
-            image: frameImage,
+            imageClean: frameImageClean,
+            imageWithAI: frameImageWithAI,
             timestamp: timestamp,
             score: postureScore,
             pose: pose
         };
     }
 
-    // Capture reachback moment
-    if (!keyFrames.reachback || reachbackScore > (keyFrames.reachback.score || 0)) {
-        keyFrames.reachback = {
-            image: frameImage,
-            timestamp: timestamp,
-            score: reachbackScore,
-            pose: pose
-        };
-    }
+    // THROWING SEQUENCE: Reachback → Power Pocket → Release → Follow Through
+    // Use temporal constraints to capture correct moments in sequence
 
-    // Capture power pocket moment
-    if (!keyFrames.powerPocket || powerPocketScore > (keyFrames.powerPocket.score || 0)) {
-        keyFrames.powerPocket = {
-            image: frameImage,
-            timestamp: timestamp,
-            score: powerPocketScore,
-            pose: pose
-        };
-    }
-
-    // Capture follow-through (last 25% of video)
-    const videoProgress = timestamp / videoElement.duration;
-    if (videoProgress > 0.75 && armExtensionScore > 50) {
-        if (!keyFrames.followThrough || armExtensionScore > (keyFrames.followThrough.score || 0)) {
-            keyFrames.followThrough = {
-                image: frameImage,
+    // 1. Capture reachback moment (arm back, typically early in throw)
+    if (reachbackScore > 50) { // Only capture if score is decent
+        if (!keyFrames.reachback || reachbackScore > (keyFrames.reachback.score || 0)) {
+            keyFrames.reachback = {
+                imageClean: frameImageClean,
+                imageWithAI: frameImageWithAI,
                 timestamp: timestamp,
-                score: armExtensionScore,
+                score: reachbackScore,
                 pose: pose
             };
+        }
+    }
+
+    // 2. Capture power pocket moment (must be after reachback if we have one)
+    if (powerPocketScore > 50) {
+        const canCapturePowerPocket = !keyFrames.reachback || timestamp > keyFrames.reachback.timestamp;
+        if (canCapturePowerPocket) {
+            if (!keyFrames.powerPocket || powerPocketScore > (keyFrames.powerPocket.score || 0)) {
+                keyFrames.powerPocket = {
+                    imageClean: frameImageClean,
+                    imageWithAI: frameImageWithAI,
+                    timestamp: timestamp,
+                    score: powerPocketScore,
+                    pose: pose
+                };
+            }
+        }
+    }
+
+    // 3. Capture release moment (must be after power pocket)
+    if (releaseScore > 50) {
+        const canCaptureRelease = !keyFrames.powerPocket || timestamp > keyFrames.powerPocket.timestamp;
+        if (canCaptureRelease) {
+            if (!keyFrames.fullArmExtension || releaseScore > (keyFrames.fullArmExtension.score || 0)) {
+                keyFrames.fullArmExtension = {
+                    imageClean: frameImageClean,
+                    imageWithAI: frameImageWithAI,
+                    timestamp: timestamp,
+                    score: releaseScore,
+                    pose: pose
+                };
+            }
+        }
+    }
+
+    // 4. Capture follow-through (must be after release, arm still extended forward)
+    if (armExtensionScore > 50) {
+        const canCaptureFollowThrough = !keyFrames.fullArmExtension || timestamp > keyFrames.fullArmExtension.timestamp + 0.1;
+        if (canCaptureFollowThrough) {
+            if (!keyFrames.followThrough || armExtensionScore > (keyFrames.followThrough.score || 0)) {
+                keyFrames.followThrough = {
+                    imageClean: frameImageClean,
+                    imageWithAI: frameImageWithAI,
+                    timestamp: timestamp,
+                    score: armExtensionScore,
+                    pose: pose
+                };
+            }
         }
     }
 
     // Store all frames for replay
     if (capturedFrames.length < 100) { // Limit to 100 frames for performance
         capturedFrames.push({
-            image: frameImage,
+            imageClean: frameImageClean,
+            imageWithAI: frameImageWithAI,
             timestamp: timestamp,
             pose: pose
         });
@@ -398,40 +442,135 @@ function calculatePostureScore(keypoints) {
     return 0;
 }
 
-// Calculate reachback score - when arm is extended back
+// Calculate reachback score - arm fully extended backward, ready for the throw
+// Based on disc golf biomechanics: arm extended back, torso rotated away from target
 function calculateReachbackScore(keypoints) {
-    const shoulder = getKeypoint(keypoints, 'right_shoulder');
-    const wrist = getKeypoint(keypoints, 'right_wrist');
+    const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
+    const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
+    const rightElbow = getKeypoint(keypoints, 'right_elbow');
+    const rightWrist = getKeypoint(keypoints, 'right_wrist');
+    const rightHip = getKeypoint(keypoints, 'right_hip');
 
-    if (shoulder.score > 0.3 && wrist.score > 0.3) {
-        // Check if wrist is behind shoulder (reachback)
-        if (wrist.x < shoulder.x - 100) {
-            const distance = shoulder.x - wrist.x;
-            return Math.min((distance / 200) * 100, 100);
+    if (rightShoulder.score > 0.3 && rightWrist.score > 0.3 && rightElbow.score > 0.3 && rightHip.score > 0.3) {
+        // TRUE REACHBACK: wrist must be behind the body's center line (hip)
+        // Not just behind shoulder, but behind the entire torso
+        const wristBehindHip = rightWrist.x < rightHip.x - 50;
+
+        // Check arm extension - elbow should be relatively straight
+        const shoulderToElbow = Math.sqrt(
+            Math.pow(rightElbow.x - rightShoulder.x, 2) +
+            Math.pow(rightElbow.y - rightShoulder.y, 2)
+        );
+        const elbowToWrist = Math.sqrt(
+            Math.pow(rightWrist.x - rightElbow.x, 2) +
+            Math.pow(rightWrist.y - rightElbow.y, 2)
+        );
+        const shoulderToWrist = Math.sqrt(
+            Math.pow(rightWrist.x - rightShoulder.x, 2) +
+            Math.pow(rightWrist.y - rightShoulder.y, 2)
+        );
+
+        // Arm is extended if the direct distance is close to sum of segments
+        const armExtension = shoulderToWrist / (shoulderToElbow + elbowToWrist);
+        const armIsExtended = armExtension > 0.85; // 85% = relatively straight
+
+        // Check shoulder rotation - right shoulder should be rotated back
+        const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x);
+        const shoulderRotated = shoulderWidth > 80; // Shoulders spread out means rotation
+
+        if (wristBehindHip && armIsExtended && shoulderRotated) {
+            // Score based on how far back the wrist is
+            const reachbackDistance = rightHip.x - rightWrist.x;
+            return Math.min((reachbackDistance / 150) * 100, 100);
         }
     }
     return 0;
 }
 
-// Calculate power pocket score - when arm is pulled in close before release
+// Calculate power pocket score - elbow bent ~90°, disc pulled in tight before release
+// Based on disc golf biomechanics: most critical moment for power transfer
 function calculatePowerPocketScore(keypoints) {
     const shoulder = getKeypoint(keypoints, 'right_shoulder');
     const elbow = getKeypoint(keypoints, 'right_elbow');
     const wrist = getKeypoint(keypoints, 'right_wrist');
+    const hip = getKeypoint(keypoints, 'right_hip');
 
-    if (shoulder.score > 0.3 && elbow.score > 0.3 && wrist.score > 0.3) {
-        // Power pocket: elbow pulled in, wrist close to chest
-        const elbowToShoulder = Math.abs(elbow.x - shoulder.x);
-        const wristToShoulder = Math.sqrt(
+    if (shoulder.score > 0.3 && elbow.score > 0.3 && wrist.score > 0.3 && hip.score > 0.3) {
+        // Calculate elbow angle - should be around 70-110 degrees for power pocket
+        const shoulderToElbow = {
+            x: elbow.x - shoulder.x,
+            y: elbow.y - shoulder.y
+        };
+        const elbowToWrist = {
+            x: wrist.x - elbow.x,
+            y: wrist.y - elbow.y
+        };
+
+        // Dot product and magnitudes for angle calculation
+        const dotProduct = shoulderToElbow.x * elbowToWrist.x + shoulderToElbow.y * elbowToWrist.y;
+        const mag1 = Math.sqrt(shoulderToElbow.x ** 2 + shoulderToElbow.y ** 2);
+        const mag2 = Math.sqrt(elbowToWrist.x ** 2 + elbowToWrist.y ** 2);
+        const elbowAngle = Math.acos(dotProduct / (mag1 * mag2)) * (180 / Math.PI);
+
+        // Power pocket: elbow bent 70-110 degrees
+        const goodElbowAngle = elbowAngle >= 70 && elbowAngle <= 110;
+
+        // Wrist should be close to hip/torso (disc pulled in)
+        const wristToHip = Math.sqrt(
+            Math.pow(wrist.x - hip.x, 2) +
+            Math.pow(wrist.y - hip.y, 2)
+        );
+        const wristCloseToBody = wristToHip < 120;
+
+        // Elbow should be forward of shoulder (pulling through)
+        const elbowForward = elbow.x > shoulder.x;
+
+        if (goodElbowAngle && wristCloseToBody && elbowForward) {
+            // Perfect power pocket - score based on how optimal the angle is
+            const angleOptimality = 100 - Math.abs(90 - elbowAngle);
+            return Math.max(angleOptimality, 70);
+        }
+    }
+    return 0;
+}
+
+// Calculate release score - arm fully extended forward at disc release
+// Based on disc golf biomechanics: maximum arm extension forward, disc about to leave hand
+function calculateReleaseScore(keypoints) {
+    const shoulder = getKeypoint(keypoints, 'right_shoulder');
+    const elbow = getKeypoint(keypoints, 'right_elbow');
+    const wrist = getKeypoint(keypoints, 'right_wrist');
+    const hip = getKeypoint(keypoints, 'right_hip');
+
+    if (shoulder.score > 0.3 && elbow.score > 0.3 && wrist.score > 0.3 && hip.score > 0.3) {
+        // Release: wrist should be FORWARD of shoulder (opposite of reachback)
+        const wristForwardOfShoulder = wrist.x > shoulder.x + 30;
+
+        // Arm should be nearly straight (extended)
+        const shoulderToElbow = Math.sqrt(
+            Math.pow(elbow.x - shoulder.x, 2) +
+            Math.pow(elbow.y - shoulder.y, 2)
+        );
+        const elbowToWrist = Math.sqrt(
+            Math.pow(wrist.x - elbow.x, 2) +
+            Math.pow(wrist.y - elbow.y, 2)
+        );
+        const shoulderToWrist = Math.sqrt(
             Math.pow(wrist.x - shoulder.x, 2) +
             Math.pow(wrist.y - shoulder.y, 2)
         );
 
-        // Check if arm is compact (power pocket position)
-        if (elbowToShoulder < 100 && wristToShoulder < 150) {
-            return 100;
+        const armExtension = shoulderToWrist / (shoulderToElbow + elbowToWrist);
+        const armIsExtended = armExtension > 0.90; // 90% = very straight for release
+
+        // Wrist should be forward of hips (body rotated through)
+        const wristForwardOfHip = wrist.x > hip.x;
+
+        if (wristForwardOfShoulder && armIsExtended && wristForwardOfHip) {
+            // Score based on arm extension and forward position
+            const releaseDistance = wrist.x - shoulder.x;
+            return Math.min((releaseDistance / 100) * 100 + (armExtension * 50), 100);
         }
-        return 50;
     }
     return 0;
 }
@@ -829,7 +968,7 @@ function getOverallFeedback(score) {
     }
 }
 
-// Display key frames gallery
+// Display key frames gallery - Discgolf throwing sequence
 function displayKeyFramesGallery() {
     // Check if gallery already exists
     let gallerySection = document.getElementById('keyFramesGallery');
@@ -839,7 +978,7 @@ function displayKeyFramesGallery() {
         gallerySection = document.createElement('div');
         gallerySection.id = 'keyFramesGallery';
         gallerySection.style.cssText = `
-            margin-top: 3rem;
+            margin-top: 2rem;
             padding: 2rem;
             background: var(--bg-tertiary);
             border-radius: 12px;
@@ -849,19 +988,17 @@ function displayKeyFramesGallery() {
     }
 
     gallerySection.innerHTML = `
-        <h3 style="color: var(--primary-color); margin-bottom: 1.5rem; font-size: 1.5rem;">
+        <h3 style="color: var(--primary-color); margin-bottom: 0.5rem; font-size: 1.5rem;">
             📸 Nyckelmoment från din analys
         </h3>
-        <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-            Här är de viktigaste ögonblicken från ditt kast med AI pose detection markerad:
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
+            De viktigaste ögonblicken från ditt kast - klicka "👁️ AI" för att växla mellan video och AI-overlay:
         </p>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
-            ${createKeyFrameCard('reachback', '↩️ Reachback', 'Armen är maximalt utsträckt bakåt, redo för kastet')}
-            ${createKeyFrameCard('powerPocket', '⚡ Power Pocket', 'Armen dras in mot kroppen för maximal kraftöverföring')}
-            ${createKeyFrameCard('bestPosture', '🎯 Bästa Hållning', 'Din kroppshållning är optimal i detta ögonblick')}
-            ${createKeyFrameCard('bestBalance', '⚖️ Bästa Balans', 'Detta är momentet när din balans var som bäst')}
-            ${createKeyFrameCard('fullArmExtension', '💪 Release', 'Armen är fullt utsträckt vid release för maximal kraft')}
-            ${createKeyFrameCard('followThrough', '🎬 Follow Through', 'Din uppföljning efter release')}
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem;">
+            ${createKeyFrameCard('reachback', '↩️ Reachback', 'Armen maximalt bakåt')}
+            ${createKeyFrameCard('powerPocket', '⚡ Power Pocket', 'Armbågen böjd ~90°, kraft laddas')}
+            ${createKeyFrameCard('fullArmExtension', '💪 Release', 'Discen släpps, arm utsträckt')}
+            ${createKeyFrameCard('followThrough', '🎬 Follow Through', 'Uppföljning efter release')}
         </div>
     `;
 }
@@ -881,13 +1018,32 @@ function createKeyFrameCard(frameKey, title, description) {
         `;
     }
 
+    const cardId = `keyframe-${frameKey}`;
+    const imgId = `img-${frameKey}`;
+    const toggleBtnId = `toggle-${frameKey}`;
+
     return `
-        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border-color); transition: all 0.3s; cursor: pointer;"
+        <div id="${cardId}" style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border-color); transition: all 0.3s;"
              onmouseover="this.style.borderColor='var(--primary-color)'; this.style.transform='translateY(-5px)'"
              onmouseout="this.style.borderColor='var(--border-color)'; this.style.transform='translateY(0)'">
-            <h4 style="color: var(--primary-color); margin-bottom: 0.5rem;">${title}</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h4 style="color: var(--primary-color); margin: 0;">${title}</h4>
+                <button id="${toggleBtnId}"
+                        onclick="toggleKeyFrameAI('${frameKey}')"
+                        style="background: var(--primary-color); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;"
+                        onmouseover="this.style.transform='scale(1.05)'"
+                        onmouseout="this.style.transform='scale(1)'">
+                    👁️ AI
+                </button>
+            </div>
             <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">${description}</p>
-            <img src="${frame.image}" style="width: 100%; border-radius: 8px; border: 2px solid var(--border-color);" alt="${title}">
+            <img id="${imgId}"
+                 src="${frame.imageWithAI}"
+                 data-clean="${frame.imageClean}"
+                 data-ai="${frame.imageWithAI}"
+                 data-showing-ai="true"
+                 style="width: 100%; border-radius: 8px; border: 2px solid var(--border-color);"
+                 alt="${title}">
             <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-primary); border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: var(--text-secondary); font-size: 0.85rem;">⏱️ Tidsstämpel</span>
@@ -896,6 +1052,32 @@ function createKeyFrameCard(frameKey, title, description) {
             </div>
         </div>
     `;
+}
+
+// Toggle between clean video screenshot and AI overlay on key frame images
+function toggleKeyFrameAI(frameKey) {
+    const imgId = `img-${frameKey}`;
+    const toggleBtnId = `toggle-${frameKey}`;
+    const img = document.getElementById(imgId);
+    const toggleBtn = document.getElementById(toggleBtnId);
+
+    if (!img || !toggleBtn) return;
+
+    const isShowingAI = img.getAttribute('data-showing-ai') === 'true';
+
+    if (isShowingAI) {
+        // Switch to clean version
+        img.src = img.getAttribute('data-clean');
+        img.setAttribute('data-showing-ai', 'false');
+        toggleBtn.textContent = '🤖 Visa AI';
+        toggleBtn.style.background = 'var(--text-light)';
+    } else {
+        // Switch to AI version
+        img.src = img.getAttribute('data-ai');
+        img.setAttribute('data-showing-ai', 'true');
+        toggleBtn.textContent = '👁️ AI';
+        toggleBtn.style.background = 'var(--primary-color)';
+    }
 }
 
 // Add replay button
@@ -1126,6 +1308,46 @@ fullscreenBtn.addEventListener('click', () => {
         document.exitFullscreen();
     }
 });
+
+// Update AI overlay when video is seeked
+videoElement.addEventListener('seeked', () => {
+    updateAIOverlayForCurrentTime();
+});
+
+// Function to update AI overlay based on current video time
+function updateAIOverlayForCurrentTime() {
+    if (poseData.length === 0 || !showAIOverlay) return;
+
+    const currentTime = videoElement.currentTime;
+
+    // Find the closest pose data for current time
+    let closestPose = null;
+    let minTimeDiff = Infinity;
+
+    for (const data of poseData) {
+        const timeDiff = Math.abs(data.timestamp - currentTime);
+        if (timeDiff < minTimeDiff) {
+            minTimeDiff = timeDiff;
+            closestPose = data;
+        }
+        // If we've passed the current time, we found the closest
+        if (data.timestamp > currentTime) break;
+    }
+
+    // Draw the pose if we found one close enough (within 0.2 seconds)
+    if (closestPose && minTimeDiff < 0.2) {
+        const pose = {
+            keypoints: closestPose.keypoints,
+            score: closestPose.score
+        };
+        drawPose(pose);
+    } else {
+        // Clear canvas if no pose data available for this time
+        if (ctx && canvas) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+}
 
 // Show alert
 function showAlert(message) {
