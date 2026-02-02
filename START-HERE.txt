@@ -1,0 +1,58 @@
+=====================================
+   STARTA LOKALSERVER - VÄLJ EN
+=====================================
+
+Du har två alternativ:
+
+📦 ALTERNATIV 1: LIVE RELOAD (REKOMMENDERAS!)
+   Fil: start-dev.bat
+
+   ✅ Webbläsaren uppdateras automatiskt när du ändrar filer
+   ✅ Ingen manuell refresh behövs
+   ✅ Bäst för utveckling
+
+   Dubbelklicka på: start-dev.bat
+
+
+🔧 ALTERNATIV 2: ENKEL SERVER
+   Fil: start-simple-server.bat
+
+   ✅ Enkel och snabb
+   ✅ Ingen installation behövs
+   ⚠️  Måste manuellt ladda om webbläsaren efter ändringar
+
+   Dubbelklicka på: start-simple-server.bat
+
+
+=====================================
+      NÄR SERVERN STARTAT
+=====================================
+
+Öppna i webbläsaren:
+→ Hemsida: http://localhost:8080/index.html
+→ AI Analyzer: http://localhost:8080/analyzer.html
+
+
+=====================================
+        STOPPA SERVERN
+=====================================
+
+Tryck Ctrl+C i kommandofönstret
+
+
+=====================================
+     FÖRSTA GÅNGEN (LIVE RELOAD)
+=====================================
+
+Om start-dev.bat inte fungerar:
+1. Öppna CMD i denna mapp
+2. Kör: python -m pip install -r requirements-dev.txt
+3. Dubbelklicka på start-dev.bat igen
+
+
+=====================================
+
+💡 TIP: Använd start-dev.bat för bästa upplevelse!
+    Webbläsaren uppdateras automatiskt! 🚀
+
+=====================================
