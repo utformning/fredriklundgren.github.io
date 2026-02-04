@@ -11,8 +11,9 @@ from livereload import Server
 def main():
     print("🚀 Starting development server with live reload...")
     print("📂 Watching directory:", os.getcwd())
-    print("🌐 Server will be available at: http://localhost:8080")
+    print("🌐 Server will be available at: http://localhost:3000")
     print("🔄 Browser will auto-refresh when files change")
+    print("🌍 Browser will open automatically in 2 seconds...")
     print("\n✨ Press Ctrl+C to stop\n")
 
     server = Server()
@@ -30,12 +31,13 @@ def main():
     server.watch('css/')
     server.watch('js/')
 
-    # Start the server
+    # Start the server with automatic browser opening
     server.serve(
         root='.',
-        port=8080,
-        host='0.0.0.0',
-        open_url_delay=1
+        port=3000,
+        host='localhost',
+        open_url=True,        # Automatically opens browser
+        open_url_delay=2      # Wait 2 seconds before opening
     )
 
 if __name__ == '__main__':
