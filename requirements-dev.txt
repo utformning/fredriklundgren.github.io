@@ -1,2 +1,2 @@
 # Development dependencies for live reload
-livereload==2.6.3
+watchdog==3.0.0
