@@ -39,8 +39,10 @@ start-dev.bat
 ## 🌐 Öppna i webbläsaren
 
 Efter att servern startat, öppna:
-- **Hemsida:** http://localhost:8080/index.html
-- **AI Analyzer:** http://localhost:8080/analyzer.html
+- **Hemsida:** http://localhost:3000/index.html
+- **AI Analyzer:** http://localhost:3000/analyzer.html
+
+**OBS:** Webbläsaren öppnas automatiskt efter 2 sekunder!
 
 ## 🔥 Hur det fungerar
 
@@ -92,6 +94,7 @@ python -m http.server 8080
 ### Nya sättet:
 ```
 start-dev.bat  (eller ./start-dev.sh)
+# Port 3000 med automatisk webbläsaröppning!
 # Webbläsaren uppdateras automatiskt!
 # Spara fil → se ändringen direkt!
 ```

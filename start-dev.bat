@@ -23,9 +23,12 @@ python -m pip install -r requirements-dev.txt
 
 echo.
 echo Starting development server...
+echo If you see port 8080 instead of 3000, something is wrong!
+echo Expected: http://localhost:3000
 echo.
 
 REM Start the dev server
+echo Running: python dev-server.py
 python dev-server.py
 
 pause

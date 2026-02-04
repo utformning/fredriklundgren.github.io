@@ -29,8 +29,8 @@ Du har två alternativ:
 =====================================
 
 Öppna i webbläsaren:
-→ Hemsida: http://localhost:8080/index.html
-→ AI Analyzer: http://localhost:8080/analyzer.html
+→ LIVE RELOAD: http://localhost:3000/index.html (start-dev.bat)
+→ SIMPLE SERVER: http://localhost:8080/index.html (start-simple-server.bat)
 
 
 =====================================

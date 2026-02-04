@@ -1,0 +1,36 @@
+=====================================
+   TEST ATT PORT 3000 FUNGERAR
+=====================================
+
+VIKTIGT! Dubbelkolla detta:
+
+1. Stäng ALLA terminalfönster och webbläsare
+2. Öppna Task Manager (Ctrl+Shift+Esc)
+3. Avsluta ALLA python.exe processer
+4. Dubbelklicka på start-dev.bat
+5. Du ska se:
+   "Server running at: http://localhost:3000"
+6. Webbläsaren öppnas automatiskt efter 2 sek
+7. URL i webbläsaren ska vara: http://localhost:3000
+
+=====================================
+         OM DET INTE FUNGERAR
+=====================================
+
+TESTA:
+1. Öppna start-dev.bat med högerklick → Edit
+2. Kolla att sista raden är: python dev-server.py
+3. Öppna dev-server.py och leta efter "PORT = "
+4. Det ska stå: PORT = 3000
+
+KANSKE DU KÖR FEL FIL?
+- start-dev.bat = Port 3000 med auto-reload ✅
+- start-simple-server.bat = Port 8080 UTAN auto-reload ❌
+
+=====================================
+
+Om det FORTFARANDE visar 8080:
+Något annat program använder port 3000.
+Ändra "PORT = 3000" till "PORT = 5000" i dev-server.py
+
+=====================================
