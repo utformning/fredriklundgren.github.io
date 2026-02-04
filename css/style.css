@@ -153,6 +153,26 @@ p {
     width: 100%;
 }
 
+.version-badge {
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 60px;
+}
+
+.version-badge:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-glow);
+}
+
 .hamburger {
     display: none;
     flex-direction: column;
@@ -1010,6 +1030,11 @@ section {
 
     .nav-menu.active {
         left: 0;
+    }
+
+    .version-badge {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.8rem;
     }
 
     .hamburger {
