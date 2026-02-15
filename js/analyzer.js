@@ -28,6 +28,11 @@ let formErrors = {
     noseUp: []
 };
 
+// CRITICAL: Throw direction detection
+// +1 = throwing left-to-right (wrist moves in +x direction)
+// -1 = throwing right-to-left (wrist moves in -x direction)
+let throwDirection = 0;
+
 // DOM Elements
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
@@ -298,9 +303,16 @@ function captureKeyFrame(pose, timestamp, previousPose) {
     const balanceScore = calculateBalanceScore(pose.keypoints);
     const armExtensionScore = calculateArmExtensionScore(pose.keypoints);
     const postureScore = calculatePostureScore(pose.keypoints);
-    const reachbackScore = calculateReachbackScore(pose.keypoints);
-    const powerPocketScore = calculatePowerPocketScore(pose.keypoints);
-    const releaseScore = calculateReleaseScore(pose.keypoints);
+
+    // NEW: These functions now return {score, reason} objects
+    const reachbackResult = calculateReachbackScore(pose.keypoints);
+    const powerPocketResult = calculatePowerPocketScore(pose.keypoints);
+    const releaseResult = calculateReleaseScore(pose.keypoints);
+
+    // Extract scores for backwards compatibility
+    const reachbackScore = reachbackResult.score;
+    const powerPocketScore = powerPocketResult.score;
+    const releaseScore = releaseResult.score;
 
     // NEW: Advanced analysis
     const previousKeypoints = previousPose ? previousPose.keypoints : null;
@@ -386,8 +398,10 @@ function captureKeyFrame(pose, timestamp, previousPose) {
                 imageWithAI: frameImageWithAI,
                 timestamp: timestamp,
                 score: reachbackScore,
+                reason: reachbackResult.reason, // NEW: Include explanation
                 pose: pose
             };
+            console.log(`✓ REACH BACK captured @ ${timestamp.toFixed(2)}s (score: ${Math.round(reachbackScore)}): ${reachbackResult.reason}`);
         }
     }
 
@@ -401,8 +415,10 @@ function captureKeyFrame(pose, timestamp, previousPose) {
                     imageWithAI: frameImageWithAI,
                     timestamp: timestamp,
                     score: powerPocketScore,
+                    reason: powerPocketResult.reason, // NEW: Include explanation
                     pose: pose
                 };
+                console.log(`✓ POWER POCKET captured @ ${timestamp.toFixed(2)}s (score: ${Math.round(powerPocketScore)}): ${powerPocketResult.reason}`);
             }
         }
     }
@@ -448,8 +464,10 @@ function captureKeyFrame(pose, timestamp, previousPose) {
                 imageWithAI: frameImageWithAI,
                 timestamp: timestamp,
                 score: xStepData.score,
+                reason: xStepData.reason, // NEW: Include explanation
                 pose: pose
             };
+            console.log(`✓ X-STEP captured @ ${timestamp.toFixed(2)}s (score: ${Math.round(xStepData.score)}): ${xStepData.reason}`);
         }
     }
 
@@ -461,8 +479,10 @@ function captureKeyFrame(pose, timestamp, previousPose) {
                 imageWithAI: frameImageWithAI,
                 timestamp: timestamp,
                 score: braceData.quality,
+                reason: braceData.reason, // NEW: Include explanation
                 pose: pose
             };
+            console.log(`✓ PLANT FOOT captured @ ${timestamp.toFixed(2)}s (score: ${Math.round(braceData.quality)}): ${braceData.reason}`);
         }
     }
 
@@ -503,8 +523,10 @@ function captureKeyFrame(pose, timestamp, previousPose) {
                     imageWithAI: frameImageWithAI,
                     timestamp: timestamp,
                     score: releaseScore,
+                    reason: releaseResult.reason, // NEW: Include explanation
                     pose: pose
                 };
+                console.log(`✓ RELEASE captured @ ${timestamp.toFixed(2)}s (score: ${Math.round(releaseScore)}): ${releaseResult.reason}`);
             }
         }
     }
@@ -565,8 +587,11 @@ function calculatePostureScore(keypoints) {
     return 0;
 }
 
-// Calculate reachback score - arm fully extended backward, ready for the throw
-// Based on disc golf biomechanics: arm extended back, torso rotated away from target
+// REACH BACK - EXAKT DEFINITION:
+// Arm maximalt utsträckt BAKÅT, bort från kastmålet
+// RÄTT: Handled är längst BAK (motsatt riktning från målet)
+// RÄTT: Arm utsträckt, kroppen roterad bort från målet
+// FEL: Arm framåt = detta är INTE reach back, det är release
 function calculateReachbackScore(keypoints) {
     const rightShoulder = getKeypoint(keypoints, 'right_shoulder');
     const leftShoulder = getKeypoint(keypoints, 'left_shoulder');
@@ -574,10 +599,15 @@ function calculateReachbackScore(keypoints) {
     const rightWrist = getKeypoint(keypoints, 'right_wrist');
     const rightHip = getKeypoint(keypoints, 'right_hip');
 
-    if (rightShoulder.score > 0.3 && rightWrist.score > 0.3 && rightElbow.score > 0.3 && rightHip.score > 0.3) {
-        // TRUE REACHBACK: wrist must be behind the body's center line (hip)
-        // Not just behind shoulder, but behind the entire torso
-        const wristBehindHip = rightWrist.x < rightHip.x - 50;
+    if (rightShoulder.score > 0.3 && rightWrist.score > 0.3 && rightElbow.score > 0.3 && rightHip.score > 0.3 && leftShoulder.score > 0.3) {
+        // CRITICAL: Wrist must be BEHIND hip (away from target, opposite throw direction)
+        // Using directional helper to handle both left-to-right and right-to-left throws
+        const wristBehindHip = isPositionBehind(rightWrist.x, rightHip.x);
+        const backwardDistance = Math.abs(getDirectionalDistance(rightWrist.x, rightHip.x));
+        const wristFarEnoughBack = backwardDistance > 50;
+
+        // CRITICAL: Wrist must also be behind shoulder (arm extended backward)
+        const wristBehindShoulder = isPositionBehind(rightWrist.x, rightShoulder.x);
 
         // Check arm extension - elbow should be relatively straight
         const shoulderToElbow = Math.sqrt(
@@ -597,21 +627,29 @@ function calculateReachbackScore(keypoints) {
         const armExtension = shoulderToWrist / (shoulderToElbow + elbowToWrist);
         const armIsExtended = armExtension > 0.85; // 85% = relatively straight
 
-        // Check shoulder rotation - right shoulder should be rotated back
+        // Check shoulder rotation - shoulders should be spread (rotated away from target)
         const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x);
         const shoulderRotated = shoulderWidth > 80; // Shoulders spread out means rotation
 
-        if (wristBehindHip && armIsExtended && shoulderRotated) {
+        // ALL conditions must be true for valid reachback
+        if (wristBehindHip && wristFarEnoughBack && wristBehindShoulder && armIsExtended && shoulderRotated) {
             // Score based on how far back the wrist is
-            const reachbackDistance = rightHip.x - rightWrist.x;
-            return Math.min((reachbackDistance / 150) * 100, 100);
+            const score = Math.min((backwardDistance / 150) * 100, 100);
+            return {
+                score: score,
+                reason: `Handled ${Math.round(backwardDistance)}px bakom höften, arm utsträckt ${Math.round(armExtension * 100)}%`
+            };
         }
     }
-    return 0;
+    return { score: 0, reason: 'Arm ej maximalt bakåt' };
 }
 
-// Calculate power pocket score - elbow bent ~90°, disc pulled in tight before release
-// Based on disc golf biomechanics: most critical moment for power transfer
+// POWER POCKET - EXAKT DEFINITION:
+// Disc dras NÄRA bröstkorgen med armbågen böjd ~90 grader
+// RÄTT: Armbåge böjd 70-110 grader
+// RÄTT: Handled nära kroppen/bröstkorgen (< 120px från höft)
+// RÄTT: Sker EFTER plant foot, INNAN release
+// FEL: Arm rak = detta är release, inte power pocket
 function calculatePowerPocketScore(keypoints) {
     const shoulder = getKeypoint(keypoints, 'right_shoulder');
     const elbow = getKeypoint(keypoints, 'right_elbow');
@@ -635,30 +673,39 @@ function calculatePowerPocketScore(keypoints) {
         const mag2 = Math.sqrt(elbowToWrist.x ** 2 + elbowToWrist.y ** 2);
         const elbowAngle = Math.acos(dotProduct / (mag1 * mag2)) * (180 / Math.PI);
 
-        // Power pocket: elbow bent 70-110 degrees
+        // CRITICAL: Power pocket requires elbow bent 70-110 degrees
         const goodElbowAngle = elbowAngle >= 70 && elbowAngle <= 110;
 
-        // Wrist should be close to hip/torso (disc pulled in)
+        // CRITICAL: Wrist should be close to hip/torso (disc pulled in tight)
         const wristToHip = Math.sqrt(
             Math.pow(wrist.x - hip.x, 2) +
             Math.pow(wrist.y - hip.y, 2)
         );
         const wristCloseToBody = wristToHip < 120;
 
-        // Elbow should be forward of shoulder (pulling through)
-        const elbowForward = elbow.x > shoulder.x;
+        // Elbow should be forward of shoulder (pulling through towards target)
+        const elbowForward = isPositionForward(elbow.x, shoulder.x);
 
+        // ALL conditions must be true for valid power pocket
         if (goodElbowAngle && wristCloseToBody && elbowForward) {
             // Perfect power pocket - score based on how optimal the angle is
             const angleOptimality = 100 - Math.abs(90 - elbowAngle);
-            return Math.max(angleOptimality, 70);
+            const score = Math.max(angleOptimality, 70);
+            return {
+                score: score,
+                reason: `Armbåge böjd ${Math.round(elbowAngle)}°, handled ${Math.round(wristToHip)}px från höften`
+            };
         }
     }
-    return 0;
+    return { score: 0, reason: 'Armbåge ej böjd eller handled ej nära kroppen' };
 }
 
-// Calculate release score - arm fully extended forward at disc release
-// Based on disc golf biomechanics: maximum arm extension forward, disc about to leave hand
+// RELEASE - EXAKT DEFINITION:
+// Exakt frame när disc LÄMNAR handen
+// RÄTT: Armen utsträckt FRAMÅT mot målet (motsats till reach back)
+// RÄTT: Handled framför axeln (arm extended towards target)
+// RÄTT: Arm nästan helt rak (> 90% extension)
+// FEL: Arm bakåt = detta är reach back, inte release
 function calculateReleaseScore(keypoints) {
     const shoulder = getKeypoint(keypoints, 'right_shoulder');
     const elbow = getKeypoint(keypoints, 'right_elbow');
@@ -666,10 +713,12 @@ function calculateReleaseScore(keypoints) {
     const hip = getKeypoint(keypoints, 'right_hip');
 
     if (shoulder.score > 0.3 && elbow.score > 0.3 && wrist.score > 0.3 && hip.score > 0.3) {
-        // Release: wrist should be FORWARD of shoulder (opposite of reachback)
-        const wristForwardOfShoulder = wrist.x > shoulder.x + 30;
+        // CRITICAL: Wrist must be FORWARD of shoulder (towards target, in throw direction)
+        const wristForwardOfShoulder = isPositionForward(wrist.x, shoulder.x);
+        const forwardDistance = Math.abs(getDirectionalDistance(wrist.x, shoulder.x));
+        const wristFarEnoughForward = forwardDistance > 30;
 
-        // Arm should be nearly straight (extended)
+        // CRITICAL: Arm should be nearly straight (extended towards target)
         const shoulderToElbow = Math.sqrt(
             Math.pow(elbow.x - shoulder.x, 2) +
             Math.pow(elbow.y - shoulder.y, 2)
@@ -687,21 +736,29 @@ function calculateReleaseScore(keypoints) {
         const armIsExtended = armExtension > 0.90; // 90% = very straight for release
 
         // Wrist should be forward of hips (body rotated through)
-        const wristForwardOfHip = wrist.x > hip.x;
+        const wristForwardOfHip = isPositionForward(wrist.x, hip.x);
 
-        if (wristForwardOfShoulder && armIsExtended && wristForwardOfHip) {
+        // ALL conditions must be true for valid release
+        if (wristForwardOfShoulder && wristFarEnoughForward && armIsExtended && wristForwardOfHip) {
             // Score based on arm extension and forward position
-            const releaseDistance = wrist.x - shoulder.x;
-            return Math.min((releaseDistance / 100) * 100 + (armExtension * 50), 100);
+            const score = Math.min((forwardDistance / 100) * 100 + (armExtension * 50), 100);
+            return {
+                score: score,
+                reason: `Handled ${Math.round(forwardDistance)}px framför axeln, arm utsträckt ${Math.round(armExtension * 100)}%`
+            };
         }
     }
-    return 0;
+    return { score: 0, reason: 'Arm ej framåt eller ej tillräckligt utsträckt' };
 }
 
-// X-STEP AND FOOTWORK ANALYSIS
-// Based on: https://discgolf.ultiworld.com/2022/07/26/tuesday-tips-dont-fake-your-x-step/
+// X-STEP - EXAKT DEFINITION:
+// Bakre foten korsar ÖVER/FRAMFÖR den främre foten
+// RÄTT: Tydligt korsande steg där bakre ben korsar över
+// RÄTT: Sker FÖRE plant foot (bromssteg)
+// RÄTT: Skapar momentum och rotation
+// FEL: Båda fötter parallella = inget X-step
 function analyzeXStep(keypoints, previousKeypoints) {
-    if (!previousKeypoints) return { score: 0, timing: false };
+    if (!previousKeypoints) return { score: 0, timing: false, reason: 'Ingen tidigare frame' };
 
     const leftAnkle = getKeypoint(keypoints, 'left_ankle');
     const rightAnkle = getKeypoint(keypoints, 'right_ankle');
@@ -715,33 +772,43 @@ function analyzeXStep(keypoints, previousKeypoints) {
         prevLeftAnkle.score > 0.3 && prevRightAnkle.score > 0.3 &&
         leftHip.score > 0.3 && rightHip.score > 0.3) {
 
-        // Detect foot movement
+        // CRITICAL: Detect active foot crossing movement
+        // For right-handed thrower: right foot (back foot) crosses over/in front of left foot
         const leftFootMoved = Math.abs(leftAnkle.x - prevLeftAnkle.x) > 20;
         const rightFootMoved = Math.abs(rightAnkle.x - prevRightAnkle.x) > 20;
 
-        // Check if hips are closed (not opened toward target)
+        // CRITICAL: Check if hips are closed (not opened toward target yet)
+        // This indicates early phase of throw, before plant foot
         const hipsClosed = Math.abs(leftHip.x - rightHip.x) < 100;
 
-        // Check foot spacing (should be shoulder-width or wider)
+        // Check foot spacing (should be crossing/close during X-step)
         const footSpacing = Math.abs(leftAnkle.x - rightAnkle.x);
         const goodSpacing = footSpacing > 80 && footSpacing < 200;
 
+        // Calculate score based on X-step characteristics
         let score = 0;
         if (leftFootMoved || rightFootMoved) score += 40;
         if (hipsClosed) score += 30;
         if (goodSpacing) score += 30;
 
+        const timing = (leftFootMoved || rightFootMoved) && hipsClosed;
+
         return {
             score: score,
-            timing: (leftFootMoved || rightFootMoved) && hipsClosed
+            timing: timing,
+            reason: timing ? `Fotrörelse detekterad, höfter stängda, spacing ${Math.round(footSpacing)}px` : 'Ingen aktiv X-step rörelse'
         };
     }
 
-    return { score: 0, timing: false };
+    return { score: 0, timing: false, reason: 'För låg confidence på fotdetektering' };
 }
 
-// BRACE DETECTION - Front foot plant
-// Based on: https://blog.dynamicdiscs.com/2017/07/why-is-footwork-so-important.html
+// BRACE / PLANT FOOT - EXAKT DEFINITION:
+// Främre foten (vänster för högerhänt) planteras i marken med kraft
+// RÄTT: Främre benet relativt rakt (> 85% utsträckt)
+// RÄTT: Vikt på främre foten (ankle under/framför knee)
+// RÄTT: Sker precis INNAN höfterna roterar framåt
+// RÄTT: Kroppen BROMSAR upp mot denna fot
 function detectBrace(keypoints) {
     const leftAnkle = getKeypoint(keypoints, 'left_ankle');
     const leftKnee = getKeypoint(keypoints, 'left_knee');
@@ -751,7 +818,7 @@ function detectBrace(keypoints) {
     if (leftAnkle.score > 0.3 && leftKnee.score > 0.3 &&
         leftHip.score > 0.3 && rightHip.score > 0.3) {
 
-        // Front leg should be relatively straight (braced)
+        // CRITICAL: Front leg should be relatively straight (braced for impact)
         const legLength = Math.sqrt(
             Math.pow(leftKnee.x - leftAnkle.x, 2) +
             Math.pow(leftKnee.y - leftAnkle.y, 2)
@@ -769,15 +836,19 @@ function detectBrace(keypoints) {
         const legStraight = hipToAnkle / (legLength + hipToKnee);
         const isBraced = legStraight > 0.85; // 85% = relatively straight
 
-        // Weight on front foot (ankle should be under or forward of knee)
+        // CRITICAL: Weight on front foot (ankle should be under or forward of knee)
         const weightForward = leftAnkle.x >= leftKnee.x - 20;
 
         if (isBraced && weightForward) {
-            return { detected: true, quality: legStraight * 100 };
+            return {
+                detected: true,
+                quality: legStraight * 100,
+                reason: `Främre ben ${Math.round(legStraight * 100)}% rakt, vikt framåt`
+            };
         }
     }
 
-    return { detected: false, quality: 0 };
+    return { detected: false, quality: 0, reason: 'Inget tydligt bromssteg' };
 }
 
 // HIP ROTATION MEASUREMENT - Enhanced version
@@ -982,6 +1053,13 @@ function analyzeResults() {
         return;
     }
 
+    // CRITICAL: Detect throw direction FIRST before any analysis
+    detectThrowDirection(poseData);
+    console.log('Detected throw direction:', throwDirection === 1 ? 'Left-to-Right' : 'Right-to-Left');
+
+    // CRITICAL: Validate temporal sequence of key moments
+    validateTemporalSequence();
+
     // Calculate metrics
     const metrics = calculateMetrics(poseData);
 
@@ -1063,6 +1141,124 @@ function getKeypoint(keypoints, name) {
 
     const index = keypointMap[name];
     return keypoints[index];
+}
+
+// CRITICAL: Detect throw direction from wrist movement over time
+// This determines if person is throwing left-to-right (+1) or right-to-left (-1)
+function detectThrowDirection(data) {
+    if (data.length < 10) {
+        throwDirection = 1; // Default to left-to-right
+        return;
+    }
+
+    // Track wrist X position over time
+    const wristPositions = data.map(frame => {
+        const wrist = getKeypoint(frame.keypoints, 'right_wrist');
+        return wrist.score > 0.3 ? wrist.x : null;
+    }).filter(x => x !== null);
+
+    if (wristPositions.length < 10) {
+        throwDirection = 1;
+        return;
+    }
+
+    // Compare first third vs last third of video
+    const firstThird = wristPositions.slice(0, Math.floor(wristPositions.length / 3));
+    const lastThird = wristPositions.slice(-Math.floor(wristPositions.length / 3));
+
+    const avgFirst = firstThird.reduce((a, b) => a + b, 0) / firstThird.length;
+    const avgLast = lastThird.reduce((a, b) => a + b, 0) / lastThird.length;
+
+    // If wrist moves from left to right (+x), direction is +1
+    // If wrist moves from right to left (-x), direction is -1
+    throwDirection = avgLast > avgFirst ? 1 : -1;
+}
+
+// Helper: Check if point A is "behind" point B relative to throw direction
+// "Behind" means opposite to throw direction (away from target)
+function isPositionBehind(posA, posB) {
+    return throwDirection === 1 ? posA < posB : posA > posB;
+}
+
+// Helper: Check if point A is "forward" of point B relative to throw direction
+// "Forward" means towards throw direction (towards target)
+function isPositionForward(posA, posB) {
+    return throwDirection === 1 ? posA > posB : posA < posB;
+}
+
+// Helper: Calculate signed distance in throw direction
+// Positive = forward (towards target), Negative = backward (away from target)
+function getDirectionalDistance(posA, posB) {
+    return throwDirection === 1 ? (posA - posB) : (posB - posA);
+}
+
+// CRITICAL: Validate temporal sequence of throwing moments
+// Correct order: X-Step → Reach Back → Plant Foot → Power Pocket → Release → Follow Through
+function validateTemporalSequence() {
+    const moments = [];
+
+    // Collect all detected moments with timestamps
+    if (keyFrames.xStep) moments.push({ name: 'X-Step', time: keyFrames.xStep.timestamp, order: 1 });
+    if (keyFrames.reachback) moments.push({ name: 'Reach Back', time: keyFrames.reachback.timestamp, order: 2 });
+    if (keyFrames.brace) moments.push({ name: 'Plant Foot', time: keyFrames.brace.timestamp, order: 3 });
+    if (keyFrames.powerPocket) moments.push({ name: 'Power Pocket', time: keyFrames.powerPocket.timestamp, order: 4 });
+    if (keyFrames.release) moments.push({ name: 'Release', time: keyFrames.release.timestamp, order: 5 });
+    if (keyFrames.followThrough) moments.push({ name: 'Follow Through', time: keyFrames.followThrough.timestamp, order: 6 });
+
+    // Sort by timestamp
+    moments.sort((a, b) => a.time - b.time);
+
+    console.log('\n=== TEMPORAL SEQUENCE VALIDATION ===');
+    console.log('Detected moments in chronological order:');
+    moments.forEach((m, i) => {
+        console.log(`  ${i + 1}. ${m.name} @ ${m.time.toFixed(2)}s`);
+    });
+
+    // Check if order matches expected sequence
+    let previousOrder = 0;
+    let sequenceValid = true;
+    const warnings = [];
+
+    moments.forEach((m, i) => {
+        if (m.order < previousOrder) {
+            sequenceValid = false;
+            warnings.push(`⚠️ WARNING: ${m.name} (expected order ${m.order}) kommer EFTER ett senare moment!`);
+        }
+        previousOrder = m.order;
+    });
+
+    if (sequenceValid) {
+        console.log('✅ Temporal sequence is VALID');
+    } else {
+        console.log('❌ Temporal sequence has ERRORS:');
+        warnings.forEach(w => console.log('  ' + w));
+        console.log('🔄 Re-analyzing problematic moments...');
+    }
+
+    // Validate specific critical checks
+    if (keyFrames.reachback && keyFrames.release) {
+        if (keyFrames.reachback.timestamp >= keyFrames.release.timestamp) {
+            console.log('❌ CRITICAL ERROR: Reach Back kommer EFTER eller samtidigt som Release!');
+            console.log(`   Reach Back @ ${keyFrames.reachback.timestamp.toFixed(2)}s: ${keyFrames.reachback.reason}`);
+            console.log(`   Release @ ${keyFrames.release.timestamp.toFixed(2)}s: ${keyFrames.release.reason}`);
+        }
+    }
+
+    if (keyFrames.powerPocket && keyFrames.release) {
+        if (keyFrames.powerPocket.timestamp >= keyFrames.release.timestamp) {
+            console.log('❌ CRITICAL ERROR: Power Pocket kommer EFTER eller samtidigt som Release!');
+            console.log(`   Power Pocket @ ${keyFrames.powerPocket.timestamp.toFixed(2)}s: ${keyFrames.powerPocket.reason}`);
+            console.log(`   Release @ ${keyFrames.release.timestamp.toFixed(2)}s: ${keyFrames.release.reason}`);
+        }
+    }
+
+    if (keyFrames.brace && keyFrames.powerPocket) {
+        if (keyFrames.brace.timestamp > keyFrames.powerPocket.timestamp) {
+            console.log('⚠️ WARNING: Plant Foot kommer EFTER Power Pocket (ovanligt men möjligt)');
+        }
+    }
+
+    console.log('=====================================\n');
 }
 
 // Analyze posture
@@ -1186,6 +1382,11 @@ function analyzeArmMovement(data) {
 }
 
 // Analyze follow through
+// FOLLOW THROUGH - EXAKT DEFINITION:
+// EFTER release - armen fortsätter rörelsen framåt och runt kroppen
+// RÄTT: Armen svänger FÖRBI kroppen mot/förbi målet
+// RÄTT: Sker EFTER release (sista 25% av videon)
+// RÄTT: Handled framåt/förbi axeln
 function analyzeFollowThrough(data) {
     if (data.length < 10) {
         return { score: 50, rating: 'warning', text: 'Video för kort för att analysera' };
@@ -1199,7 +1400,8 @@ function analyzeFollowThrough(data) {
         const wrist = getKeypoint(frame.keypoints, 'right_wrist');
 
         if (shoulder.score > 0.3 && wrist.score > 0.3) {
-            if (wrist.x > shoulder.x) {
+            // CRITICAL: Wrist should be forward of shoulder (in throw direction)
+            if (isPositionForward(wrist.x, shoulder.x)) {
                 followThroughFrames++;
             }
         }
