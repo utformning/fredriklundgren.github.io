@@ -33,6 +33,11 @@ let formErrors = {
 // -1 = throwing right-to-left (wrist moves in -x direction)
 let throwDirection = 0;
 
+// CRITICAL: Person tracking for multi-person videos
+// Tracks the identified thrower across frames to avoid analyzing wrong person
+let trackedThrowerPose = null;
+let throwerConfidence = 0;
+
 // DOM Elements
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
@@ -69,10 +74,10 @@ async function initPoseDetection() {
             throw new Error('TensorFlow kunde inte laddas. Kontrollera din internetanslutning och ladda om sidan.');
         }
 
-        // Create detector
+        // Create detector - MULTIPOSE for detecting all people in frame
         const model = poseDetection.SupportedModels.MoveNet;
         detector = await poseDetection.createDetector(model, {
-            modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
+            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING
         });
 
         loadingSpinner.classList.remove('active');
@@ -176,6 +181,9 @@ analyzeBtn.addEventListener('click', async () => {
         allArm: [],
         noseUp: []
     };
+    // Reset person tracking
+    trackedThrowerPose = null;
+    throwerConfidence = 0;
     analyzeBtn.disabled = true;
     analyzeBtn.innerHTML = '<span>⏳ Analyserar...</span>';
 
@@ -191,6 +199,157 @@ analyzeBtn.addEventListener('click', async () => {
     // Process video frames
     await processVideo();
 });
+
+/**
+ * CRITICAL: Select the correct person (thrower) when multiple people are in frame
+ *
+ * This function identifies the person who is actually throwing the disc, not background people or spectators.
+ *
+ * Criteria for identifying the thrower:
+ * 1. Person size (closer to camera = larger bounding box)
+ * 2. Movement activity (thrower has more dynamic arm/body movement)
+ * 3. Arm extension (thrower extends arm during throw)
+ * 4. Position in frame (thrower usually in center/foreground)
+ * 5. Tracking continuity (prefer same person from previous frame)
+ *
+ * @param {Array} poses - Array of detected poses from MoveNet
+ * @param {Object} previousThrowerPose - Previously identified thrower pose for tracking
+ * @returns {Object} The selected thrower pose
+ */
+function selectThrowerPerson(poses, previousThrowerPose = null) {
+    if (!poses || poses.length === 0) {
+        return null;
+    }
+
+    // If only one person detected, use that person
+    if (poses.length === 1) {
+        return poses[0];
+    }
+
+    // Multiple people detected - need to identify the thrower
+    console.log(`🔍 Multiple people detected (${poses.length}), identifying thrower...`);
+
+    let bestPose = null;
+    let bestScore = -1;
+
+    poses.forEach((pose, index) => {
+        let score = 0;
+
+        // Get key body points
+        const leftWrist = pose.keypoints[9];
+        const rightWrist = pose.keypoints[10];
+        const leftShoulder = pose.keypoints[5];
+        const rightShoulder = pose.keypoints[6];
+        const leftHip = pose.keypoints[11];
+        const rightHip = pose.keypoints[12];
+        const nose = pose.keypoints[0];
+
+        // Require minimum confidence for key points
+        const minConfidence = 0.3;
+        if (leftWrist.score < minConfidence || rightWrist.score < minConfidence ||
+            leftShoulder.score < minConfidence || rightShoulder.score < minConfidence) {
+            console.log(`  Person ${index + 1}: Low confidence, skipping`);
+            return; // Skip this person
+        }
+
+        // CRITERION 1: Person size (closer to camera = larger)
+        // Calculate bounding box area based on keypoints
+        const validKeypoints = pose.keypoints.filter(kp => kp.score > minConfidence);
+        if (validKeypoints.length > 0) {
+            const xs = validKeypoints.map(kp => kp.x);
+            const ys = validKeypoints.map(kp => kp.y);
+            const width = Math.max(...xs) - Math.min(...xs);
+            const height = Math.max(...ys) - Math.min(...ys);
+            const area = width * height;
+
+            // Normalize area score (larger person = higher score)
+            // Typical person area: 50000-200000 pixels²
+            const areaScore = Math.min(area / 100000, 2.0) * 30; // Max 60 points
+            score += areaScore;
+            console.log(`  Person ${index + 1}: Size score = ${areaScore.toFixed(1)} (area: ${area.toFixed(0)})`);
+        }
+
+        // CRITERION 2: Arm extension (thrower extends arm)
+        // Calculate arm extension for both arms
+        const leftArmExtension = Math.sqrt(
+            Math.pow(leftWrist.x - leftShoulder.x, 2) +
+            Math.pow(leftWrist.y - leftShoulder.y, 2)
+        );
+        const rightArmExtension = Math.sqrt(
+            Math.pow(rightWrist.x - rightShoulder.x, 2) +
+            Math.pow(rightWrist.y - rightShoulder.y, 2)
+        );
+        const maxArmExtension = Math.max(leftArmExtension, rightArmExtension);
+
+        // Normalize arm extension score
+        // Typical extended arm: 100-300 pixels
+        const armScore = Math.min(maxArmExtension / 150, 2.0) * 25; // Max 50 points
+        score += armScore;
+        console.log(`  Person ${index + 1}: Arm extension score = ${armScore.toFixed(1)} (dist: ${maxArmExtension.toFixed(0)})`);
+
+        // CRITERION 3: Position in frame (center/foreground)
+        // Thrower is usually in center of frame
+        const centerX = canvas ? canvas.width / 2 : 640;
+        const centerY = canvas ? canvas.height / 2 : 480;
+        const personCenterX = (leftShoulder.x + rightShoulder.x) / 2;
+        const personCenterY = (leftShoulder.y + rightShoulder.y) / 2;
+
+        const distanceFromCenter = Math.sqrt(
+            Math.pow(personCenterX - centerX, 2) +
+            Math.pow(personCenterY - centerY, 2)
+        );
+
+        // Closer to center = higher score
+        const maxDistance = Math.sqrt(centerX * centerX + centerY * centerY);
+        const positionScore = (1 - distanceFromCenter / maxDistance) * 15; // Max 15 points
+        score += positionScore;
+        console.log(`  Person ${index + 1}: Position score = ${positionScore.toFixed(1)} (dist: ${distanceFromCenter.toFixed(0)})`);
+
+        // CRITERION 4: Tracking continuity (prefer same person from previous frame)
+        if (previousThrowerPose) {
+            const prevLeftShoulder = previousThrowerPose.keypoints[5];
+            const prevRightShoulder = previousThrowerPose.keypoints[6];
+            const prevCenterX = (prevLeftShoulder.x + prevRightShoulder.x) / 2;
+            const prevCenterY = (prevLeftShoulder.y + prevRightShoulder.y) / 2;
+
+            const trackingDistance = Math.sqrt(
+                Math.pow(personCenterX - prevCenterX, 2) +
+                Math.pow(personCenterY - prevCenterY, 2)
+            );
+
+            // If person is close to previous thrower position, bonus points
+            // Typical movement between frames: 0-50 pixels
+            if (trackingDistance < 100) {
+                const trackingScore = (1 - trackingDistance / 100) * 20; // Max 20 points
+                score += trackingScore;
+                console.log(`  Person ${index + 1}: Tracking score = ${trackingScore.toFixed(1)} (dist: ${trackingDistance.toFixed(0)})`);
+            }
+        }
+
+        // CRITERION 5: Body orientation (thrower is often sideways to target)
+        // Calculate shoulder width vs hip width ratio
+        const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+        const hipWidth = Math.abs(leftHip.x - rightHip.x);
+
+        // Thrower often has shoulders more spread than hips (sideways stance)
+        if (shoulderWidth > hipWidth * 0.8) {
+            const orientationScore = 10; // Bonus points
+            score += orientationScore;
+            console.log(`  Person ${index + 1}: Orientation score = ${orientationScore}`);
+        }
+
+        console.log(`  Person ${index + 1}: TOTAL SCORE = ${score.toFixed(1)}`);
+
+        // Update best pose
+        if (score > bestScore) {
+            bestScore = score;
+            bestPose = pose;
+        }
+    });
+
+    console.log(`✅ Selected thrower with score: ${bestScore.toFixed(1)}`);
+    return bestPose;
+}
 
 // Process video with TensorFlow
 async function processVideo() {
@@ -209,11 +368,22 @@ async function processVideo() {
             }
 
             try {
-                // Detect pose
+                // Detect ALL poses in frame (MULTIPOSE model)
                 const poses = await detector.estimatePoses(videoElement);
 
                 if (poses.length > 0) {
-                    const pose = poses[0];
+                    // CRITICAL: Select the correct person (thrower) when multiple people are in frame
+                    const pose = selectThrowerPerson(poses, trackedThrowerPose);
+
+                    if (!pose) {
+                        console.warn('No valid thrower detected in frame, skipping...');
+                        frameCount++;
+                        requestAnimationFrame(processFrame);
+                        return;
+                    }
+
+                    // Update tracked thrower for next frame
+                    trackedThrowerPose = pose;
 
                     // Store pose data
                     poseData.push({
@@ -299,6 +469,27 @@ function drawPose(pose) {
 
 // Capture key frames during analysis
 function captureKeyFrame(pose, timestamp, previousPose) {
+    // VALIDATION CHECK: Verify we're analyzing the correct person (thrower)
+    // This prevents analyzing background people or spectators
+    const leftWrist = pose.keypoints[9];
+    const rightWrist = pose.keypoints[10];
+    const leftShoulder = pose.keypoints[5];
+    const rightShoulder = pose.keypoints[6];
+
+    // Check if key points have sufficient confidence
+    const minConfidence = 0.3;
+    const hasValidKeypoints = (
+        leftWrist.score >= minConfidence &&
+        rightWrist.score >= minConfidence &&
+        leftShoulder.score >= minConfidence &&
+        rightShoulder.score >= minConfidence
+    );
+
+    if (!hasValidKeypoints) {
+        console.warn(`⚠️ Frame at ${timestamp.toFixed(2)}s: Low confidence keypoints, skipping analysis`);
+        return; // Skip this frame
+    }
+
     // Calculate scores for this frame
     const balanceScore = calculateBalanceScore(pose.keypoints);
     const armExtensionScore = calculateArmExtensionScore(pose.keypoints);
