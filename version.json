@@ -1,8 +1,8 @@
 {
   "major": 2,
   "minor": 2,
-  "patch": 0,
-  "version": "2.2.0",
-  "lastUpdated": "2026-02-15T19:30:00.000000",
+  "patch": 1,
+  "version": "2.2.1",
+  "lastUpdated": "2026-02-15T19:04:17.424793",
   "description": "CRITICAL: Multi-person detection - AI now correctly identifies and tracks the thrower when multiple people are in frame"
 }
