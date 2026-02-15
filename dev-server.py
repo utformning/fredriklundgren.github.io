@@ -7,11 +7,13 @@ Automatically refreshes browser when files change
 import os
 import sys
 import time
+import json
 import webbrowser
 import http.server
 import socketserver
 import threading
 from pathlib import Path
+from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -137,8 +139,59 @@ def open_browser(port):
     time.sleep(2)
     webbrowser.open(f'http://localhost:{port}')
 
+def update_version():
+    """
+    Automatically update version number using Semantic Versioning
+    - PATCH increments on each server restart
+    - When PATCH reaches 100, it resets to 0 and MINOR increments
+    - MAJOR is only changed manually
+    """
+    version_file = 'version.json'
+
+    try:
+        # Read current version
+        if os.path.exists(version_file):
+            with open(version_file, 'r') as f:
+                version_data = json.load(f)
+        else:
+            # Initialize version if file doesn't exist
+            version_data = {
+                "major": 2,
+                "minor": 1,
+                "patch": 0,
+                "version": "2.1.0",
+                "lastUpdated": datetime.now().isoformat(),
+                "description": "Automatic version management system initialized"
+            }
+
+        # Increment PATCH
+        version_data['patch'] += 1
+
+        # If PATCH reaches 100, reset to 0 and increment MINOR
+        if version_data['patch'] >= 100:
+            version_data['patch'] = 0
+            version_data['minor'] += 1
+
+        # Update version string
+        version_data['version'] = f"{version_data['major']}.{version_data['minor']}.{version_data['patch']}"
+        version_data['lastUpdated'] = datetime.now().isoformat()
+
+        # Save updated version
+        with open(version_file, 'w') as f:
+            json.dump(version_data, f, indent=2)
+
+        return version_data['version']
+
+    except Exception as e:
+        print(f"⚠️  Warning: Could not update version: {e}")
+        return "2.1.0"
+
 def main():
+    # Update version automatically
+    version = update_version()
+
     print("🚀 Starting development server with live reload...")
+    print(f"📦 Version: {version}")
     print(f"📂 Watching directory: {os.getcwd()}")
     print(f"🌐 Server running at: http://localhost:{PORT}")
     print("🔄 Browser will auto-refresh when HTML/CSS/JS files change")

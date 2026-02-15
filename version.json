@@ -1,0 +1,8 @@
+{
+  "major": 2,
+  "minor": 1,
+  "patch": 0,
+  "version": "2.1.0",
+  "lastUpdated": "2026-02-15T18:14:20.909055",
+  "description": "Automatic version management system - will auto-increment on server restart"
+}
