@@ -42,12 +42,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Fallback to default version
         const versionBadges = document.querySelectorAll('.version-badge, #version-badge');
         versionBadges.forEach(badge => {
-            badge.textContent = 'v.2.2.0';
+            badge.textContent = 'v.2.2.1';
         });
 
         const footerVersionElements = document.querySelectorAll('.footer-version, #footer-version');
         footerVersionElements.forEach(element => {
-            element.textContent = 'Version 2.2.0';
+            element.textContent = 'Version 2.2.1';
         });
     }
 });
